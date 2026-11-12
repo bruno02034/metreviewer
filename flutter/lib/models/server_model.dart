@@ -222,6 +222,27 @@ class ServerModel with ChangeNotifier {
     _clipboardOk = clipOption != 'N';
 
     notifyListeners();
+    metreAutoStart();
+  }
+
+  // Metre: o PDV não depende de alguém tocar em "Iniciar serviço" nem ligar "iniciar ao ligar".
+  // As permissões de bateria e sobreposição são pedidas uma vez; depois tudo sobe sozinho. Ver METRE-CHANGES.md.
+  Future<void> metreAutoStart() async {
+    if (!isAndroid) return;
+    if (await gFFI.invokeMethod(AndroidChannel.kGetStartOnBootOpt) != true) {
+      for (final p in [kRequestIgnoreBatteryOptimizations, kSystemAlertWindow]) {
+        if (!await AndroidPermissionManager.check(p)) {
+          await AndroidPermissionManager.request(p);
+        }
+      }
+      if (await AndroidPermissionManager.check(kRequestIgnoreBatteryOptimizations) &&
+          await AndroidPermissionManager.check(kSystemAlertWindow)) {
+        gFFI.invokeMethod(AndroidChannel.kSetStartOnBootOpt, true);
+      }
+    }
+    if (!_isStart) {
+      await startService();
+    }
   }
 
   updatePasswordModel() async {

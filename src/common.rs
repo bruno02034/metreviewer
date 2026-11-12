@@ -2516,9 +2516,14 @@ fn apply_metre_defaults() {
         ("relay-server", "216.128.173.155"),
         ("key", "ujujErrAhYWyxGzDMvusuitqF+IfsBxcPrZFN05dxuY="),
         ("api-server", "https://216-128-173-155.sslip.io"),
+        // resolução cheia no PDV Android (o padrão do upstream reduz a tela pela metade)
+        ("enable-android-software-encoding-half-scale", "N"),
     ] {
         d.insert(k.to_owned(), v.to_owned());
     }
+    drop(d);
+    // o técnico abre a sessão já na melhor qualidade de imagem
+    config::DEFAULT_DISPLAY_SETTINGS.write().unwrap().insert("image_quality".to_owned(), "best".to_owned());
 }
 pub fn load_custom_client() {
     apply_metre_defaults();

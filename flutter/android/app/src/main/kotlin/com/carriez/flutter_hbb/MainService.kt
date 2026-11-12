@@ -256,9 +256,37 @@ class MainService : Service() {
         FFI.startServer(configPath, homePath, "")
 
         createForegroundNotification()
+        serviceHandler?.postDelayed(inputWatch, 30_000)
+    }
+
+    // Metre: avisa no PDV quando o "controle de entrada" (Acessibilidade) estiver desligado;
+    // o Android não deixa o app religá-lo sozinho. Ver METRE-CHANGES.md.
+    private val inputWatch = object : Runnable {
+        override fun run() {
+            val id = DEFAULT_NOTIFY_ID + 50
+            if (InputService.isOpen) {
+                notificationManager.cancel(id)
+            } else {
+                val intent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE else FLAG_UPDATE_CURRENT
+                val notification = NotificationCompat.Builder(this@MainService, notificationChannel)
+                    .setSmallIcon(R.mipmap.ic_stat_logo)
+                    .setContentTitle("MetreViewer: controle remoto desligado")
+                    .setContentText("Toque aqui e ative \"MetreViewer Input\" para o suporte operar este aparelho.")
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setOngoing(true)
+                    .setContentIntent(PendingIntent.getActivity(this@MainService, id, intent, flags))
+                    .build()
+                notificationManager.notify(id, notification)
+            }
+            serviceHandler?.postDelayed(this, 30_000)
+        }
     }
 
     override fun onDestroy() {
+        serviceHandler?.removeCallbacks(inputWatch)
+        notificationManager.cancel(DEFAULT_NOTIFY_ID + 50)
         checkMediaPermission()
         stopService(Intent(this, FloatingWindowService::class.java))
         super.onDestroy()
