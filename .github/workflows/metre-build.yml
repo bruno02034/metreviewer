@@ -6,6 +6,10 @@ on:
     branches:
       - metre
 
+# publica os instaladores como release (pré-lançamento) do fork
+permissions:
+  contents: write
+
 jobs:
   build:
     uses: ./.github/workflows/metre-flutter-build.yml
