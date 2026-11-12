@@ -1,0 +1,15 @@
+name: MetreViewer build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - metre
+
+jobs:
+  build:
+    uses: ./.github/workflows/metre-flutter-build.yml
+    secrets: inherit
+    with:
+      upload-artifact: true
+      upload-tag: "metre-nightly"
