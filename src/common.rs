@@ -2506,7 +2506,22 @@ pub fn rustdesk_interval(i: Interval) -> ThrottledInterval {
     ThrottledInterval::new(i)
 }
 
+// Metre: padrões de fábrica do MetreViewer. DEFAULT_SETTINGS (e não HARD_SETTINGS) para que o
+// suporte ainda possa trocar o servidor nas configurações. Ver METRE-CHANGES.md.
+fn apply_metre_defaults() {
+    *config::APP_NAME.write().unwrap() = "MetreViewer".to_owned();
+    let mut d = config::DEFAULT_SETTINGS.write().unwrap();
+    for (k, v) in [
+        ("custom-rendezvous-server", "216.128.173.155"),
+        ("relay-server", "216.128.173.155"),
+        ("key", "ujujErrAhYWyxGzDMvusuitqF+IfsBxcPrZFN05dxuY="),
+        ("api-server", "https://216-128-173-155.sslip.io"),
+    ] {
+        d.insert(k.to_owned(), v.to_owned());
+    }
+}
 pub fn load_custom_client() {
+    apply_metre_defaults();
     #[cfg(debug_assertions)]
     if let Ok(data) = std::fs::read_to_string("./custom.txt") {
         read_custom_client(data.trim());
@@ -2605,6 +2620,7 @@ pub fn get_dst_align_rgba() -> usize {
 }
 
 pub fn read_custom_client(config: &str) {
+    apply_metre_defaults();
     let Ok(data) = decode64(config) else {
         log::error!("Failed to decode custom client config");
         return;
