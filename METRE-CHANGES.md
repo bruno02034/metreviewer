@@ -11,3 +11,4 @@ Cada mudança no código do upstream está listada aqui, para facilitar a atuali
 | `flutter/android/app/build.gradle` | `applicationId` = `com.metre.viewer` (namespace Kotlin mantido) | Instala ao lado do RustDesk comum; menos mudanças que renomear pacotes |
 | `flutter/android/app/src/main/AndroidManifest.xml` | Rótulos `MetreViewer` e `MetreViewer Input` | Marca |
 | `flutter/windows/runner/Runner.rc` | `FileDescription`/`ProductName` = MetreViewer (nome do .exe mantido) | Marca; scripts de build dependem de `rustdesk.exe` |
+| `flutter/android/app/src/main/res/mipmap-*/ic_launcher*.png`, `ic_stat_logo.png`, `values/ic_launcher_background.xml`, `res/icon.*`, `res/*.png`, `res/tray-icon.ico`, `flutter/windows/runner/resources/app_icon.ico` | Ícones redesenhados: círculo laranja Metre + chapéu de chef (gerados por script, mesmas dimensões dos originais) | Marca |
