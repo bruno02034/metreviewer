@@ -3707,13 +3707,9 @@ impl LoginConfigHandler {
                     .insert("other-server-key".to_owned(), c.clone());
             }
         }
-        // peer_relay only — see `initialize`: neither the proxy nor the WebSocket transport is a
-        // fact about this peer, and writing one here makes it permanent.
-        if self.peer_relay {
-            config
-                .options
-                .insert("force-always-relay".to_owned(), "Y".to_owned());
-        }
+        // Metre: "Conectar via relay" vale só para aquela sessão. O upstream gravava a escolha no
+        // aparelho e toda sessão seguinte ia pelo relay, mesmo na mesma rede (M10, 13/11).
+        // A opção marcada pelo técnico no menu do aparelho continua valendo (gravada lá).
         #[cfg(feature = "flutter")]
         {
             // sync connected password to personal ab automatically if it is not shared password
