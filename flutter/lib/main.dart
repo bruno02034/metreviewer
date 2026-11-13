@@ -26,6 +26,7 @@ import 'package:window_manager/window_manager.dart';
 import 'common.dart';
 import 'consts.dart';
 import 'mobile/pages/home_page.dart';
+import 'mobile/pages/metre_pdv_page.dart';
 import 'mobile/pages/server_page.dart';
 import 'mobile/widgets/deploy_dialog.dart';
 import 'models/platform_model.dart';
@@ -505,7 +506,10 @@ class _AppState extends State<App> with WidgetsBindingObserver {
               ? const DesktopTabPage()
               : isWeb
                   ? WebHomePage()
-                  : HomePage(),
+                  // Metre: no Android o app é o do PDV (tela única). Ver METRE-CHANGES.md.
+                  : isAndroid
+                      ? const MetrePdvPage()
+                      : HomePage(),
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,

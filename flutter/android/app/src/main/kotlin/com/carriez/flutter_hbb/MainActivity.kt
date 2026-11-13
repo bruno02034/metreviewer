@@ -347,6 +347,14 @@ class MainActivity : FlutterActivity() {
                         result.success(false)
                     }
                 }
+                // Metre: tela de "iniciar automaticamente" do fabricante, se o aparelho tiver uma.
+                "metre_autostart" -> {
+                    val intent = MetreCompat.autostartIntent(context)
+                    if (call.arguments == "open" && intent != null) {
+                        try { startActivity(intent) } catch (e: Exception) { Log.w(logTag, "autostart: $e") }
+                    }
+                    result.success(intent != null)
+                }
                 "check_service" -> {
                     Companion.flutterMethodChannel?.invokeMethod(
                         "on_state_changed",

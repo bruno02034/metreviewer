@@ -257,6 +257,7 @@ class MainService : Service() {
 
         createForegroundNotification()
         serviceHandler?.postDelayed(inputWatch, 30_000)
+        MetreCompat.scheduleWatchdog(this)
     }
 
     // Metre: avisa no PDV quando o "controle de entrada" (Acessibilidade) estiver desligado;

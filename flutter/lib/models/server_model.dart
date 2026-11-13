@@ -15,8 +15,6 @@ import '../common/formatter/id_formatter.dart';
 import '../desktop/pages/server_page.dart' as desktop;
 import '../desktop/widgets/tabbar_widget.dart';
 import '../mobile/pages/server_page.dart';
-import '../mobile/widgets/android_file_transfer_setup.dart';
-import '../utils/android_documents.dart';
 import 'model.dart';
 
 const kLoginDialogTag = "LOGIN";
@@ -225,22 +223,22 @@ class ServerModel with ChangeNotifier {
     metreAutoStart();
   }
 
-  // Metre: o PDV não depende de alguém tocar em "Iniciar serviço" nem ligar "iniciar ao ligar".
-  // As permissões de bateria e sobreposição são pedidas uma vez; depois tudo sobe sozinho. Ver METRE-CHANGES.md.
+  // Metre: o PDV não depende de alguém tocar em "Iniciar serviço". A tela do PDV (metre_pdv_page.dart)
+  // pede as permissões uma vez; depois o serviço sobe sozinho ao abrir o app, ao ligar o aparelho e
+  // depois de atualizar. Ver METRE-CHANGES.md.
+  static const kMetreMediaGranted = 'metre-media-granted';
+
+  Future<bool> metreKeepAliveOk() async =>
+      await AndroidPermissionManager.check(kRequestIgnoreBatteryOptimizations) &&
+      await AndroidPermissionManager.check(kSystemAlertWindow);
+
   Future<void> metreAutoStart() async {
     if (!isAndroid) return;
-    if (await gFFI.invokeMethod(AndroidChannel.kGetStartOnBootOpt) != true) {
-      for (final p in [kRequestIgnoreBatteryOptimizations, kSystemAlertWindow]) {
-        if (!await AndroidPermissionManager.check(p)) {
-          await AndroidPermissionManager.request(p);
-        }
-      }
-      if (await AndroidPermissionManager.check(kRequestIgnoreBatteryOptimizations) &&
-          await AndroidPermissionManager.check(kSystemAlertWindow)) {
-        gFFI.invokeMethod(AndroidChannel.kSetStartOnBootOpt, true);
-      }
+    if (await metreKeepAliveOk()) {
+      gFFI.invokeMethod(AndroidChannel.kSetStartOnBootOpt, true);
     }
-    if (!_isStart) {
+    // A primeira captura de tela é aceita pelo cliente na tela do PDV; daí em diante sobe sozinha.
+    if (!_isStart && bind.mainGetLocalOption(key: kMetreMediaGranted) == 'Y') {
       await startService();
     }
   }
@@ -422,14 +420,8 @@ class ServerModel with ChangeNotifier {
         stopService();
       }
     } else {
-      if (isAndroid) {
-        try {
-          await AndroidDocuments.requireLogFolder();
-          await showAndroidFileTransferSetup(gFFI);
-        } catch (_) {
-          debugPrint('Folder setup failed; continuing service startup');
-        }
-      }
+      // Metre: sem pedir pasta ao cliente. Sem a pasta pública, os logs ficam no armazenamento
+      // privado do app (Config::log_path) e os arquivos na área própria do app. Ver METRE-CHANGES.md.
       await checkRequestNotificationPermission();
       if (bind.mainGetLocalOption(key: kOptionDisableFloatingWindow) != 'Y') {
         await checkFloatingWindowPermission();
@@ -497,6 +489,7 @@ class ServerModel with ChangeNotifier {
     switch (name) {
       case "media":
         _mediaOk = value;
+        if (value) bind.mainSetLocalOption(key: kMetreMediaGranted, value: 'Y');
         if (value && !_isStart) {
           startService();
         }

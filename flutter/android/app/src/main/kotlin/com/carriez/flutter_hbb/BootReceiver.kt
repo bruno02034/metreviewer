@@ -19,7 +19,11 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         Log.d(logTag, "onReceive ${intent.action}")
 
-        if (Intent.ACTION_BOOT_COMPLETED == intent.action || DEBUG_BOOT_COMPLETED == intent.action) {
+        // Metre: além de ligar o aparelho, sobe o serviço depois de atualizar o app e quando
+        // a verificação periódica encontra o serviço parado. Ver METRE-CHANGES.md.
+        val action = intent.action
+        if (action in listOf(Intent.ACTION_BOOT_COMPLETED, DEBUG_BOOT_COMPLETED,
+                Intent.ACTION_MY_PACKAGE_REPLACED, ACT_METRE_WATCHDOG)) {
             // check SharedPreferences config
             val prefs = context.getSharedPreferences(KEY_SHARED_PREFERENCES, FlutterActivity.MODE_PRIVATE)
             if (!prefs.getBoolean(KEY_START_ON_BOOT_OPT, false)) {
@@ -31,16 +35,25 @@ class BootReceiver : BroadcastReceiver() {
                 Log.d(logTag, "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS or SYSTEM_ALERT_WINDOW is not granted")
                 return
             }
+            MetreCompat.scheduleWatchdog(context)
+            if (action == ACT_METRE_WATCHDOG && MainService.isReady) return
 
             val it = Intent(context, MainService::class.java).apply {
-                action = ACT_INIT_MEDIA_PROJECTION_AND_SERVICE
+                this.action = ACT_INIT_MEDIA_PROJECTION_AND_SERVICE
                 putExtra(EXT_INIT_FROM_BOOT, true)
             }
-            Toast.makeText(context, "RustDesk is Open", Toast.LENGTH_LONG).show()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(it)
-            } else {
-                context.startService(it)
+            if (action != ACT_METRE_WATCHDOG) {
+                Toast.makeText(context, "MetreViewer: pronto para suporte", Toast.LENGTH_LONG).show()
+            }
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(it)
+                } else {
+                    context.startService(it)
+                }
+            } catch (e: Exception) {
+                // Android 12+ pode recusar o início em segundo plano; a próxima verificação tenta de novo.
+                Log.w(logTag, "start service failed: $e")
             }
         }
     }

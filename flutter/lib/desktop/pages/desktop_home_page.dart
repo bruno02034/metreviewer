@@ -12,6 +12,7 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/connection_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
+import 'package:flutter_hbb/desktop/pages/metre_home_page.dart';
 import 'package:flutter_hbb/desktop/widgets/update_progress.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
@@ -59,6 +60,22 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   Widget build(BuildContext context) {
     super.build(context);
     final isIncomingOnly = bind.isIncomingOnly();
+    // Metre: tela inicial própria (metre_home_page.dart); os avisos de instalar/atualizar continuam. Ver METRE-CHANGES.md.
+    if (!isIncomingOnly) {
+      return _buildBlock(
+          child: MetreHomePage(
+        notices: ChangeNotifierProvider.value(
+          value: gFFI.serverModel,
+          child: Align(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Obx(() => buildHelpCards(stateGlobal.updateUrl.value))
+                  .marginOnly(bottom: 16),
+            ),
+          ),
+        ),
+      ));
+    }
     return _buildBlock(
         child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -612,8 +629,8 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
                 colors: [
-                  Color.fromARGB(255, 226, 66, 188),
-                  Color.fromARGB(255, 244, 114, 124),
+                  Color(0xFFE8461E), // Metre: laranja da marca
+                  Color(0xFFFF7A2F),
                 ],
               )),
               padding: EdgeInsets.all(20),
