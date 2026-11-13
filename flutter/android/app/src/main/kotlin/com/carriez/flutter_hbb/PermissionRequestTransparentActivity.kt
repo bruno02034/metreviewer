@@ -12,9 +12,33 @@ import android.util.Log
 class PermissionRequestTransparentActivity: Activity() {
     private val logTag = "permissionRequest"
 
+    companion object {
+        // Metre: um pedido de captura por vez. Depois de atualizar o app, o religamento automático e a
+        // abertura do app pediam juntos, e um pedido cancelava o outro. Ver METRE-CHANGES.md.
+        private var pending = false
+    }
+
+    private var owner = false // só quem fez o pedido libera a vez
+
+    override fun onDestroy() {
+        if (owner && isFinishing) pending = false
+        super.onDestroy()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.d(logTag, "onCreate PermissionRequestTransparentActivity: intent.action: ${intent.action}")
+        if (savedInstanceState == null && intent.action == ACT_REQUEST_MEDIA_PROJECTION) {
+            if (pending) {
+                Log.d(logTag, "projection request already pending, skip")
+                finish()
+                return
+            }
+            pending = true
+            owner = true
+        } else if (savedInstanceState != null) {
+            owner = true // recriada após girar a tela: continua sendo o mesmo pedido
+        }
 
         when (intent.action) {
             ACT_REQUEST_MEDIA_PROJECTION -> {

@@ -38,6 +38,13 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
       gFFI.invokeMethod("check_service");
     });
     _refresh(autoStart: true);
+    // Ver a tela é o padrão do app: ao abrir, se a captura não estiver ativa, já pede a autorização do
+    // Android (se o cliente marcou "Não mostrar novamente", o Android libera sem mostrar nada).
+    // Só na abertura, para não repetir o pedido se o cliente recusar.
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      final m = gFFI.serverModel;
+      if (mounted && !m.mediaOk && !m.isStart) m.startService();
+    });
   }
 
   @override
@@ -111,9 +118,9 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
           if (!model.mediaOk)
             _Step(
                 Icons.screen_share_outlined,
-                'Permitir que o técnico veja a tela',
-                'Na próxima tela, marque "Não mostrar novamente" e toque em "Iniciar agora". '
-                    'Assim isso não é perguntado de novo.',
+                'Confirmação do Android para mostrar a tela',
+                'O Android exige que você confirme uma vez. Marque "Não mostrar novamente" '
+                    'e toque em "Iniciar agora".',
                 _grantScreen),
           if (!model.inputOk)
             _Step(
