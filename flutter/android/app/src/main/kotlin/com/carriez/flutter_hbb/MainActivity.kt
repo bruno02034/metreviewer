@@ -945,7 +945,16 @@ class MainActivity : FlutterActivity() {
                 }
             }
             if (codec.isEncoder) {
-                MetreCompat.codecReport.add("${codec.name} [${codec.supportedTypes.joinToString()}] hw=$hw")
+                val details = codec.supportedTypes.filter { it == "video/avc" || it == "video/hevc" }.joinToString { type ->
+                    try {
+                        val c = codec.getCapabilitiesForType(type)
+                        "$type nv12=${c.colorFormats.contains(COLOR_FormatYUV420SemiPlanar)} " +
+                            "surface=${c.colorFormats.contains(COLOR_FormatSurface)} " +
+                            "tamanho_ok=${c.videoCapabilities.isSizeSupported(w, h) || c.videoCapabilities.isSizeSupported(h, w)} " +
+                            "max=${c.videoCapabilities.supportedWidths.upper}x${c.videoCapabilities.supportedHeights.upper}"
+                    } catch (e: Exception) { "$type erro=$e" }
+                }
+                MetreCompat.codecReport.add("${codec.name} [${codec.supportedTypes.joinToString()}] hw=$hw $details")
             }
             if (hw != true) {
                 return@forEach

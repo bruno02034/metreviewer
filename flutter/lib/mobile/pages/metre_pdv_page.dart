@@ -320,10 +320,15 @@ class _AdvancedPage extends StatelessWidget {
             ServerPage(),
             SettingsPage(),
             FutureBuilder(
-              future: gFFI.invokeMethod('metre_diag'),
+              future: gFFI.invokeMethodWithResult<String>('metre_diag'),
               builder: (_, snap) => SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
-                child: SelectableText('${snap.data ?? 'Carregando…'}',
+                child: SelectableText(
+                    snap.hasError
+                        ? 'Erro: ${snap.error}'
+                        : snap.connectionState == ConnectionState.done
+                            ? (snap.data ?? '(vazio)')
+                            : 'Carregando…',
                     style:
                         const TextStyle(fontFamily: 'monospace', fontSize: 13)),
               ),
