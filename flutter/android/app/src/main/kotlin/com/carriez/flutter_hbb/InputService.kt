@@ -108,6 +108,8 @@ class InputService : AccessibilityService() {
 
     private var lastX = 0
     private var lastY = 0
+    // Metre: maior distância do ponto inicial no gesto atual (Android < 8), para separar toque de arrasto
+    private var gestureMaxMove = 0
 
     private val volumeController: VolumeController by lazy { VolumeController(applicationContext.getSystemService(AUDIO_SERVICE) as AudioManager) }
 
@@ -345,6 +347,7 @@ class InputService : AccessibilityService() {
         lastTouchGestureStartTime = System.currentTimeMillis()
         lastX = x
         lastY = y
+        gestureMaxMove = 0
     }
 
     @RequiresApi(Build.VERSION_CODES.N)
@@ -404,6 +407,7 @@ class InputService : AccessibilityService() {
             lastY = y
         } else {
             touchPath.lineTo(x.toFloat(), y.toFloat())
+            gestureMaxMove = max(gestureMaxMove, abs(x - lastX) + abs(y - lastY))
         }
     }
 
@@ -411,7 +415,19 @@ class InputService : AccessibilityService() {
     private fun endGestureBelowO(x: Int, y: Int) {
         try {
             touchPath.lineTo(x.toFloat(), y.toFloat())
-            var duration = System.currentTimeMillis() - lastTouchGestureStartTime
+            val held = System.currentTimeMillis() - lastTouchGestureStartTime
+            val moved = max(gestureMaxMove, abs(x - lastX) + abs(y - lastY))
+            gestureMaxMove = 0
+            // Metre: o Android 7 não continua um gesto em andamento (continueStroke é do Android 8),
+            // então o gesto inteiro só é enviado ao soltar e era refeito com a mesma duração: um
+            // clique levava o dobro do tempo e um arrasto de 2 s só aparecia depois de 4 s.
+            // Toque: 30 ms. Segurar parado: mantém (toque longo). Arrasto: no máximo 300 ms.
+            // Ver METRE-CHANGES.md.
+            var duration = when {
+                moved <= 8 && held < longPressDuration -> 30L
+                moved <= 8 -> held
+                else -> held.coerceAtMost(300L)
+            }
             if (duration <= 0) {
                 duration = 1
             }

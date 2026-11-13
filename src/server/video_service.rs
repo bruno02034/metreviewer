@@ -1299,7 +1299,8 @@ static METRE_H264_FAILED: std::sync::atomic::AtomicBool = std::sync::atomic::Ato
 #[cfg(all(target_os = "android", feature = "hwcodec"))]
 fn metre_h264_wanted() -> bool {
     !METRE_H264_FAILED.load(std::sync::atomic::Ordering::Relaxed)
-        && Config::get_option("metre-h264-surface") != "N"
+        // desligado por padrão: no M10 (build 12) derrubou as conexões; só com metre-h264-surface=Y
+        && Config::get_option("metre-h264-surface") == "Y"
         && Encoder::negotiated_codec() == CodecFormat::H264
         && HwRamEncoder::try_get(CodecFormat::H264).is_some()
 }
