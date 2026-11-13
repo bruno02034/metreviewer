@@ -93,7 +93,7 @@ class MainActivity : FlutterActivity() {
         initFlutterChannel(flutterMethodChannel!!)
         thread {
             try {
-                setCodecInfo()
+                setCodecInfo(this)
             } catch (e: Exception) {
                 Log.e("MainActivity", "Failed to setCodecInfo: ${e.message}", e)
             }
@@ -912,100 +912,6 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun setCodecInfo() {
-        val codecList = MediaCodecList(MediaCodecList.REGULAR_CODECS)
-        val codecs = codecList.codecInfos
-        val codecArray = JSONArray()
-
-        val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val wh = getScreenSize(windowManager)
-        var w = wh.first
-        var h = wh.second
-        val align = 64
-        w = (w + align - 1) / align * align
-        h = (h + align - 1) / align * align
-        codecs.forEach { codec ->
-            val codecObject = JSONObject()
-            codecObject.put("name", codec.name)
-            codecObject.put("is_encoder", codec.isEncoder)
-            var hw: Boolean? = null;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                hw = codec.isHardwareAccelerated
-            } else {
-                // https://chromium.googlesource.com/external/webrtc/+/HEAD/sdk/android/src/java/org/webrtc/MediaCodecUtils.java#29
-                // https://chromium.googlesource.com/external/webrtc/+/master/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java#229
-                if (listOf("OMX.google.", "OMX.SEC.", "c2.android").any { codec.name.startsWith(it, true) }) {
-                    hw = false
-                } else if (listOf("c2.qti", "OMX.qcom.video", "OMX.Exynos", "OMX.hisi", "OMX.MTK", "OMX.Intel", "OMX.Nvidia").any { codec.name.startsWith(it, true) }) {
-                    hw = true
-                } else if (listOf("OMX.", "c2.").any { codec.name.startsWith(it, true) }) {
-                    // Metre: chips fora da lista (Rockchip, Allwinner, Spreadtrum, Amlogic... comuns em PDVs)
-                    // também têm codificador por hardware; se ele falhar, o núcleo volta ao VP8 por software.
-                    hw = true
-                }
-            }
-            if (codec.isEncoder) {
-                val details = codec.supportedTypes.filter { it == "video/avc" || it == "video/hevc" }.joinToString { type ->
-                    try {
-                        val c = codec.getCapabilitiesForType(type)
-                        "$type nv12=${c.colorFormats.contains(COLOR_FormatYUV420SemiPlanar)} " +
-                            "surface=${c.colorFormats.contains(COLOR_FormatSurface)} " +
-                            "tamanho_ok=${c.videoCapabilities.isSizeSupported(w, h) || c.videoCapabilities.isSizeSupported(h, w)} " +
-                            "max=${c.videoCapabilities.supportedWidths.upper}x${c.videoCapabilities.supportedHeights.upper}"
-                    } catch (e: Exception) { "$type erro=$e" }
-                }
-                MetreCompat.codecReport.add("${codec.name} [${codec.supportedTypes.joinToString()}] hw=$hw $details")
-            }
-            if (hw != true) {
-                return@forEach
-            }
-            codecObject.put("hw", hw)
-            var mime_type = ""
-            codec.supportedTypes.forEach { type ->
-                if (listOf("video/avc", "video/hevc").contains(type)) { // "video/x-vnd.on2.vp8", "video/x-vnd.on2.vp9", "video/av01"
-                    mime_type = type;
-                }
-            }
-            if (mime_type.isNotEmpty()) {
-                codecObject.put("mime_type", mime_type)
-                val caps = codec.getCapabilitiesForType(mime_type)
-                if (codec.isEncoder) {
-                    // Encoder's max_height and max_width are interchangeable
-                    if (!caps.videoCapabilities.isSizeSupported(w,h) && !caps.videoCapabilities.isSizeSupported(h,w)) {
-                        return@forEach
-                    }
-                }
-                codecObject.put("min_width", caps.videoCapabilities.supportedWidths.lower)
-                codecObject.put("max_width", caps.videoCapabilities.supportedWidths.upper)
-                codecObject.put("min_height", caps.videoCapabilities.supportedHeights.lower)
-                codecObject.put("max_height", caps.videoCapabilities.supportedHeights.upper)
-                val surface = caps.colorFormats.contains(COLOR_FormatSurface);
-                codecObject.put("surface", surface)
-                val nv12 = caps.colorFormats.contains(COLOR_FormatYUV420SemiPlanar)
-                codecObject.put("nv12", nv12)
-                if (!(nv12 || surface)) {
-                    return@forEach
-                }
-                codecObject.put("min_bitrate", caps.videoCapabilities.bitrateRange.lower / 1000)
-                codecObject.put("max_bitrate", caps.videoCapabilities.bitrateRange.upper / 1000)
-                if (!codec.isEncoder) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        codecObject.put("low_latency", caps.isFeatureSupported(MediaCodecInfo.CodecCapabilities.FEATURE_LowLatency))
-                    }
-                }
-                if (!codec.isEncoder) {
-                    return@forEach
-                }
-                codecArray.put(codecObject)
-            }
-        }
-        val result = JSONObject()
-        result.put("version", Build.VERSION.SDK_INT)
-        result.put("w", w)
-        result.put("h", h)
-        result.put("codecs", codecArray)
-        FFI.setCodecInfo(result.toString())
-    }
 
     private fun onVoiceCallStarted() {
         var ok = false
@@ -1059,4 +965,111 @@ class MainActivity : FlutterActivity() {
         super.onStart()
         stopService(Intent(this, FloatingWindowService::class.java))
     }
+}
+
+// Metre: fora da MainActivity para o MainService também carregar a lista quando o M10 liga sozinho.
+fun setCodecInfo(context: Context) {
+    val codecList = MediaCodecList(MediaCodecList.REGULAR_CODECS)
+    val codecs = codecList.codecInfos
+    val codecArray = JSONArray()
+
+    val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    val wh = getScreenSize(windowManager)
+    var w = wh.first
+    var h = wh.second
+    val align = 64
+    w = (w + align - 1) / align * align
+    h = (h + align - 1) / align * align
+    var hwFull = false
+    var hwHalfOnly = false
+    codecs.forEach { codec ->
+        val codecObject = JSONObject()
+        codecObject.put("name", codec.name)
+        codecObject.put("is_encoder", codec.isEncoder)
+        var hw: Boolean? = null;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            hw = codec.isHardwareAccelerated
+        } else {
+            // https://chromium.googlesource.com/external/webrtc/+/HEAD/sdk/android/src/java/org/webrtc/MediaCodecUtils.java#29
+            // https://chromium.googlesource.com/external/webrtc/+/master/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java#229
+            if (listOf("OMX.google.", "OMX.SEC.", "c2.android").any { codec.name.startsWith(it, true) }) {
+                hw = false
+            } else if (listOf("c2.qti", "OMX.qcom.video", "OMX.Exynos", "OMX.hisi", "OMX.MTK", "OMX.Intel", "OMX.Nvidia").any { codec.name.startsWith(it, true) }) {
+                hw = true
+            } else if (listOf("OMX.", "c2.").any { codec.name.startsWith(it, true) }) {
+                // Metre: chips fora da lista (Rockchip, Allwinner, Spreadtrum, Amlogic... comuns em PDVs)
+                // também têm codificador por hardware; se ele falhar, o núcleo volta ao VP8 por software.
+                hw = true
+            }
+        }
+        if (codec.isEncoder) {
+            val details = codec.supportedTypes.filter { it == "video/avc" || it == "video/hevc" }.joinToString { type ->
+                try {
+                    val c = codec.getCapabilitiesForType(type)
+                    "$type nv12=${c.colorFormats.contains(COLOR_FormatYUV420SemiPlanar)} " +
+                        "surface=${c.colorFormats.contains(COLOR_FormatSurface)} " +
+                        "tamanho_ok=${c.videoCapabilities.isSizeSupported(w, h) || c.videoCapabilities.isSizeSupported(h, w)} " +
+                        "max=${c.videoCapabilities.supportedWidths.upper}x${c.videoCapabilities.supportedHeights.upper}"
+                } catch (e: Exception) { "$type erro=$e" }
+            }
+            MetreCompat.codecReport.add("${codec.name} [${codec.supportedTypes.joinToString()}] hw=$hw $details")
+        }
+        if (hw != true) {
+            return@forEach
+        }
+        codecObject.put("hw", hw)
+        var mime_type = ""
+        codec.supportedTypes.forEach { type ->
+            if (listOf("video/avc", "video/hevc").contains(type)) { // "video/x-vnd.on2.vp8", "video/x-vnd.on2.vp9", "video/av01"
+                mime_type = type;
+            }
+        }
+        if (mime_type.isNotEmpty()) {
+            codecObject.put("mime_type", mime_type)
+            val caps = codec.getCapabilitiesForType(mime_type)
+            if (codec.isEncoder) {
+                // Encoder's max_height and max_width are interchangeable
+                // Metre: aceita também o codificador que só suporta metade da tela; o núcleo então reduz
+                // a captura pela metade (video_service.rs, check_change_scale). Ex.: M10 MT6580, H.264 até 720 px.
+                val v = caps.videoCapabilities
+                val full = v.isSizeSupported(w,h) || v.isSizeSupported(h,w)
+                if (!full && !v.isSizeSupported(w / 2, h / 2) && !v.isSizeSupported(h / 2, w / 2)) {
+                    return@forEach
+                }
+                if (caps.colorFormats.contains(COLOR_FormatYUV420SemiPlanar)) {
+                    if (full) hwFull = true else hwHalfOnly = true
+                }
+            }
+            codecObject.put("min_width", caps.videoCapabilities.supportedWidths.lower)
+            codecObject.put("max_width", caps.videoCapabilities.supportedWidths.upper)
+            codecObject.put("min_height", caps.videoCapabilities.supportedHeights.lower)
+            codecObject.put("max_height", caps.videoCapabilities.supportedHeights.upper)
+            val surface = caps.colorFormats.contains(COLOR_FormatSurface);
+            codecObject.put("surface", surface)
+            val nv12 = caps.colorFormats.contains(COLOR_FormatYUV420SemiPlanar)
+            codecObject.put("nv12", nv12)
+            if (!(nv12 || surface)) {
+                return@forEach
+            }
+            codecObject.put("min_bitrate", caps.videoCapabilities.bitrateRange.lower / 1000)
+            codecObject.put("max_bitrate", caps.videoCapabilities.bitrateRange.upper / 1000)
+            if (!codec.isEncoder) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    codecObject.put("low_latency", caps.isFeatureSupported(MediaCodecInfo.CodecCapabilities.FEATURE_LowLatency))
+                }
+            }
+            if (!codec.isEncoder) {
+                return@forEach
+            }
+            codecArray.put(codecObject)
+        }
+    }
+    val result = JSONObject()
+    result.put("version", Build.VERSION.SDK_INT)
+    result.put("w", w)
+    result.put("h", h)
+    result.put("codecs", codecArray)
+    MetreCompat.hwNeedsHalf = hwHalfOnly && !hwFull
+    FFI.setCodecInfo(result.toString())
+    MetreCompat.codecInfoLoaded = true
 }

@@ -1227,8 +1227,17 @@ fn check_change_scale(hardware: bool) -> ResultType<()> {
     }
     let screen_size = scrap::screen_size();
     let scale_soft = hbb_common::config::option2bool(SCALE_SOFT, &Config::get_option(SCALE_SOFT));
-    let half_scale = !hardware && scale_soft;
-    log::info!("hardware: {hardware}, scale_soft: {scale_soft}, screen_size: {screen_size:?}",);
+    // Metre: codificador por hardware que não aguenta a tela inteira (M10 MT6580: H.264 até 720 px)
+    // trabalha com metade da resolução, em vez de cair no VP8 por software. Ver METRE-CHANGES.md.
+    let hw_needs_half = hardware
+        && scrap::android::ffi::get_codec_info().map_or(false, |info| {
+            let side = info.w.max(info.h);
+            !info.codecs.iter().any(|c| {
+                c.is_encoder && c.hw == Some(true) && c.max_width.max(c.max_height) >= side
+            })
+        });
+    let half_scale = (!hardware && scale_soft) || hw_needs_half;
+    log::info!("hardware: {hardware}, scale_soft: {scale_soft}, hw_needs_half: {hw_needs_half}, screen_size: {screen_size:?}",);
     scrap::android::call_main_service_set_by_name(
         "half_scale",
         Some(half_scale.to_string().as_str()),

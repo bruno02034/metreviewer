@@ -240,6 +240,11 @@ class MainService : Service() {
         super.onCreate()
         Log.d(logTag,"MainService onCreate, sdk int:${Build.VERSION.SDK_INT} reuseVirtualDisplay:$reuseVirtualDisplay")
         FFI.init(this)
+        // Metre: ao ligar sozinho (sem abrir o app) a lista de codificadores não era carregada e o
+        // M10 ficava sem H.264 por hardware. Ver METRE-CHANGES.md.
+        if (!MetreCompat.codecInfoLoaded) {
+            try { setCodecInfo(this) } catch (e: Exception) { Log.e(logTag, "setCodecInfo: $e") }
+        }
         HandlerThread("Service", Process.THREAD_PRIORITY_BACKGROUND).apply {
             start()
             serviceLooper = looper
@@ -336,7 +341,8 @@ class MainService : Service() {
         Log.d(logTag,"updateScreenInfo:w:$w,h:$h")
         var scale = 1
         if (w != 0 && h != 0) {
-            if (isHalfScale == true && (w > MAX_SCREEN_SIZE || h > MAX_SCREEN_SIZE)) {
+            // Metre: antes de o núcleo decidir, já começa pela metade se o H.264 do chip só aguenta isso
+            if ((isHalfScale ?: MetreCompat.hwNeedsHalf) && (w > MAX_SCREEN_SIZE || h > MAX_SCREEN_SIZE)) {
                 scale = 2
                 w /= scale
                 h /= scale

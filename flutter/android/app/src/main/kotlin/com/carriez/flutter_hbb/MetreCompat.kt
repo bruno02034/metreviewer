@@ -15,6 +15,11 @@ object MetreCompat {
     // Codificadores de vídeo do aparelho, para o diagnóstico em "Opções avançadas".
     val codecReport = mutableListOf<String>()
 
+    // O codificador por hardware só aguenta metade da tela (ex.: M10 MT6580, H.264 até 720 px):
+    // a captura já nasce com metade da resolução, para o codificador ser criado no tamanho certo.
+    @Volatile var hwNeedsHalf = false
+    @Volatile var codecInfoLoaded = false
+
     fun diagnostics(context: Context): String = buildString {
         appendLine("Aparelho: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.HARDWARE}), Android ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT}")
         appendLine("Processador: ${Build.SUPPORTED_ABIS.joinToString()}, núcleos: ${Runtime.getRuntime().availableProcessors()}")
