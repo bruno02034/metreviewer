@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.SystemClock
 
@@ -20,10 +21,39 @@ object MetreCompat {
     @Volatile var hwNeedsHalf = false
     @Volatile var codecInfoLoaded = false
 
+    // O Wi-Fi do Android entra em economia de energia entre um pacote e outro: no M10 o ping na
+    // mesma rede ia de 2 ms a 1,3 s (o roteador respondia em 0 ms), o que atrasava cliques,
+    // congelava a imagem e estourava a conexão direta (1 s de prazo) e caía no relay.
+    // Com o serviço no ar, o rádio fica acordado.
+    private var wifiLock: WifiManager.WifiLock? = null
+
+    @Suppress("DEPRECATION")
+    fun holdWifi(context: Context, hold: Boolean) {
+        try {
+            if (hold && wifiLock == null) {
+                val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+                wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "metre:wifi").apply {
+                    setReferenceCounted(false); acquire()
+                }
+            } else if (!hold) {
+                wifiLock?.let { if (it.isHeld) it.release() }
+                wifiLock = null
+            }
+        } catch (e: Exception) { android.util.Log.e("MetreCompat", "wifi lock: $e") }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun wifiInfo(context: Context): String = try {
+        val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val i = wm.connectionInfo
+        "sinal ${i.rssi} dBm, ${i.linkSpeed} Mbps, ${i.frequency} MHz, sem economia: ${wifiLock?.isHeld == true}"
+    } catch (e: Exception) { "indisponível ($e)" }
+
     fun diagnostics(context: Context): String = buildString {
         appendLine("Aparelho: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.HARDWARE}), Android ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT}")
         appendLine("Processador: ${Build.SUPPORTED_ABIS.joinToString()}, núcleos: ${Runtime.getRuntime().availableProcessors()}")
         appendLine("Captura ativa: ${MainService.isReady}, controle ativo: ${InputService.isOpen}")
+        appendLine("Wi-Fi: ${wifiInfo(context)}")
         appendLine("Codificadores de vídeo:")
         codecReport.distinct().forEach { appendLine("  $it") }
         appendLine()
@@ -32,7 +62,7 @@ object MetreCompat {
         val logs = listOfNotNull(context.getExternalFilesDir(null), context.filesDir)
             .flatMap { it.walkTopDown().maxDepth(4).filter { f -> f.isFile && f.parentFile?.name == "Logs" }.toList() }
             .sortedBy { it.lastModified() }
-        val keys = listOf("metre-stats", "metre-h264", "codec", "encoder", "hwcodec", "half_scale", "fps", "Connection closed", "ERROR")
+        val keys = listOf("metre-stats", "metre-h264", "codec", "encoder", "hwcodec", "half_scale", "fps", "Connection closed", "ERROR", "intranet", "relay", "punch")
         logs.takeLast(2).flatMap { f -> try { f.readLines() } catch (e: Exception) { listOf("erro ao ler ${f.name}: $e") } }
             .filter { line -> keys.any { line.contains(it, true) } }
             .takeLast(60)

@@ -279,6 +279,7 @@ class MainService : Service() {
         createForegroundNotification()
         serviceHandler?.postDelayed(inputWatch, 30_000)
         MetreCompat.scheduleWatchdog(this)
+        MetreCompat.holdWifi(this, true)
     }
 
     // Metre: avisa no PDV quando o "controle de entrada" (Acessibilidade) estiver desligado;
@@ -307,6 +308,7 @@ class MainService : Service() {
     }
 
     override fun onDestroy() {
+        MetreCompat.holdWifi(this, false)
         serviceHandler?.removeCallbacks(inputWatch)
         notificationManager.cancel(DEFAULT_NOTIFY_ID + 50)
         checkMediaPermission()
