@@ -12,6 +12,17 @@ import android.os.SystemClock
 const val ACT_METRE_WATCHDOG = "com.metre.viewer.WATCHDOG"
 
 object MetreCompat {
+    // Codificadores de vídeo do aparelho, para o diagnóstico em "Opções avançadas".
+    val codecReport = mutableListOf<String>()
+
+    fun diagnostics(context: Context): String = buildString {
+        appendLine("Aparelho: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.HARDWARE}), Android ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT}")
+        appendLine("Processador: ${Build.SUPPORTED_ABIS.joinToString()}, núcleos: ${Runtime.getRuntime().availableProcessors()}")
+        appendLine("Captura ativa: ${MainService.isReady}, controle ativo: ${InputService.isOpen}")
+        appendLine("Codificadores de vídeo:")
+        codecReport.distinct().forEach { appendLine("  $it") }
+    }
+
     // Verificação periódica: se o Android matar o serviço, o BootReceiver o sobe de novo.
     fun scheduleWatchdog(context: Context) {
         val intent = Intent(context, BootReceiver::class.java).setAction(ACT_METRE_WATCHDOG)

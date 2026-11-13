@@ -355,6 +355,7 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(intent != null)
                 }
+                "metre_diag" -> result.success(MetreCompat.diagnostics(context))
                 "check_service" -> {
                     Companion.flutterMethodChannel?.invokeMethod(
                         "on_state_changed",
@@ -937,7 +938,14 @@ class MainActivity : FlutterActivity() {
                     hw = false
                 } else if (listOf("c2.qti", "OMX.qcom.video", "OMX.Exynos", "OMX.hisi", "OMX.MTK", "OMX.Intel", "OMX.Nvidia").any { codec.name.startsWith(it, true) }) {
                     hw = true
+                } else if (listOf("OMX.", "c2.").any { codec.name.startsWith(it, true) }) {
+                    // Metre: chips fora da lista (Rockchip, Allwinner, Spreadtrum, Amlogic... comuns em PDVs)
+                    // também têm codificador por hardware; se ele falhar, o núcleo volta ao VP8 por software.
+                    hw = true
                 }
+            }
+            if (codec.isEncoder) {
+                MetreCompat.codecReport.add("${codec.name} [${codec.supportedTypes.joinToString()}] hw=$hw")
             }
             if (hw != true) {
                 return@forEach

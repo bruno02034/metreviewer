@@ -306,14 +306,29 @@ class _AdvancedPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DefaultTabController(
-        length: 2,
+        length: 3,
         child: Scaffold(
           appBar: AppBar(
             title: const Text('Opções avançadas'),
-            bottom: const TabBar(
-                tabs: [Tab(text: 'Serviço e permissões'), Tab(text: 'Configurações')]),
+            bottom: const TabBar(tabs: [
+              Tab(text: 'Serviço e permissões'),
+              Tab(text: 'Configurações'),
+              Tab(text: 'Diagnóstico'),
+            ]),
           ),
-          body: TabBarView(children: [ServerPage(), SettingsPage()]),
+          body: TabBarView(children: [
+            ServerPage(),
+            SettingsPage(),
+            FutureBuilder(
+              future: gFFI.invokeMethod('metre_diag'),
+              builder: (_, snap) => SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: SelectableText('${snap.data ?? 'Carregando…'}',
+                    style:
+                        const TextStyle(fontFamily: 'monospace', fontSize: 13)),
+              ),
+            ),
+          ]),
         ),
       );
 }
