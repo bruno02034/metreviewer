@@ -3094,14 +3094,21 @@ pub mod server_side {
         if let Ok(home_dir) = env.get_string(&home_dir) {
             *config::APP_HOME_DIR.write().unwrap() = home_dir.into();
         }
+        // Metre: quando o serviço sobe sozinho (ligar o aparelho, atualizar o app), a tela do app não
+        // roda e as configurações da Metre não eram aplicadas: o nome do app ficava o padrão, a
+        // configuração era lida de outro arquivo (ID novo) e o servidor caía no público.
+        // Aplicadas antes do log, para o log também ir para a pasta do MetreViewer. Ver METRE-CHANGES.md.
+        let custom_client_config: String = env
+            .get_string(&custom_client_config)
+            .map(|s| s.into())
+            .unwrap_or_default();
+        if custom_client_config.is_empty() {
+            crate::load_custom_client();
+        } else {
+            crate::read_custom_client(&custom_client_config);
+        }
         #[cfg(not(debug_assertions))]
         crate::platform::android_log::initialize();
-        if let Ok(custom_client_config) = env.get_string(&custom_client_config) {
-            if !custom_client_config.is_empty() {
-                let custom_client_config: String = custom_client_config.into();
-                crate::read_custom_client(&custom_client_config);
-            }
-        }
         std::thread::spawn(move || start_server(true));
     }
 
