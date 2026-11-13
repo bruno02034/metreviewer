@@ -658,6 +658,14 @@ fn run(vs: VideoService) -> ResultType<()> {
     );
     let client_record = video_qos.record();
     drop(video_qos);
+    // Metre: no Android com H.264 por hardware, o motor direto da tela substitui captura+codificação.
+    #[cfg(all(target_os = "android", feature = "hwcodec"))]
+    if vs.source.is_monitor() {
+        if !client_record && !record_incoming && metre_h264_wanted() {
+            return metre_h264_run(&sp, display_idx, &c);
+        }
+        metre_h264_set(false, 0);
+    }
     let (mut encoder, encoder_cfg, codec_format, use_i444, recorder) = match setup_encoder(
         &c,
         sp.name(),
@@ -1280,6 +1288,157 @@ fn check_privacy_mode_changed(
 fn refresh_allowed(unfed: bool, warmed_up: bool, latency_free: bool) -> bool {
     // Only VideoToolbox has been seen to need this; other platforms keep refreshing as before.
     !cfg!(target_os = "macos") || unfed || warmed_up || latency_free
+}
+
+// Metre: motor de vídeo direto da tela (Android). O codificador H.264 do chip recebe a tela pela
+// GPU (MetreH264.kt) e este laço só repassa os pacotes prontos ao técnico. Se o codificador não
+// produzir nada por 6 s, volta ao motor antigo até o app reiniciar. Ver METRE-CHANGES.md.
+#[cfg(all(target_os = "android", feature = "hwcodec"))]
+static METRE_H264_FAILED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(all(target_os = "android", feature = "hwcodec"))]
+fn metre_h264_wanted() -> bool {
+    !METRE_H264_FAILED.load(std::sync::atomic::Ordering::Relaxed)
+        && Config::get_option("metre-h264-surface") != "N"
+        && Encoder::negotiated_codec() == CodecFormat::H264
+        && HwRamEncoder::try_get(CodecFormat::H264).is_some()
+}
+
+#[cfg(all(target_os = "android", feature = "hwcodec"))]
+fn metre_h264_cmd(name: &str, arg1: &str, arg2: &str) {
+    scrap::android::call_main_service_set_by_name(name, Some(arg1), Some(arg2)).ok();
+}
+
+#[cfg(all(target_os = "android", feature = "hwcodec"))]
+fn metre_h264_set(on: bool, kbps: i32) {
+    metre_h264_cmd("metre_surface", &on.to_string(), &kbps.to_string());
+}
+
+/// Taxa (kbit/s) pela área da imagem e pela qualidade escolhida pelo técnico.
+#[cfg(all(target_os = "android", feature = "hwcodec"))]
+fn metre_kbps(w: usize, h: usize, ratio: f32) -> i32 {
+    ((w * h) as f32 / 1000.0 * 2.5 * ratio).clamp(250.0, 4000.0) as i32
+}
+
+#[cfg(all(target_os = "android", feature = "hwcodec"))]
+fn metre_h264_run(sp: &GenericService, display_idx: usize, c: &CapturerInfo) -> ResultType<()> {
+    use scrap::android::ffi::{metre_h264_clear, metre_h264_take};
+    if let Err(e) = check_change_scale(true) {
+        try_broadcast_display_changed(sp, display_idx, c, true).ok();
+        bail!(e);
+    }
+    let (w, h, _) = scrap::screen_size();
+    let (w, h) = (w as usize, h as usize);
+    let mut ratio = VIDEO_QOS.lock().unwrap().ratio();
+    let mut kbps = metre_kbps(w, h, ratio);
+    metre_h264_clear();
+    metre_h264_set(true, kbps); // já rodando: o serviço pede um quadro-chave
+    {
+        let mut q = VIDEO_QOS.lock().unwrap();
+        q.store_bitrate(kbps as _);
+        q.set_support_changing_quality(&sp.name(), true);
+    }
+    if sp.is_option_true(OPTION_REFRESH) {
+        sp.set_option_bool(OPTION_REFRESH, false);
+    }
+    log::info!("metre-h264: motor direto da tela {w}x{h}, {kbps} kbit/s");
+    let mut wait_key = true;
+    let mut last_packet = Instant::now();
+    let mut last_key_request = Instant::now();
+    let mut second = Instant::now();
+    let mut sent = 0usize;
+    let (mut st_frames, mut st_bytes, mut st_start) = (0u32, 0usize, Instant::now());
+    while sp.ok() {
+        if Encoder::negotiated_codec() != CodecFormat::H264 {
+            log::info!("metre-h264: codec mudou, saindo do motor direto");
+            bail!("SWITCH");
+        }
+        check_privacy_mode_changed(sp, display_idx, c)?;
+        // técnico novo entrando: recomeça para ele receber um quadro-chave
+        sp.snapshot(|sps| {
+            if sps.has_subscribes() {
+                bail!("SWITCH");
+            }
+            Ok(())
+        })?;
+        if sp.is_option_true(OPTION_REFRESH) {
+            sp.set_option_bool(OPTION_REFRESH, false);
+            metre_h264_cmd("metre_keyframe", "", "");
+        }
+        {
+            let mut q = VIDEO_QOS.lock().unwrap();
+            if q.ratio() != ratio {
+                ratio = q.ratio();
+                kbps = metre_kbps(w, h, ratio);
+                metre_h264_cmd("metre_bitrate", &kbps.to_string(), "");
+                q.store_bitrate(kbps as _);
+            }
+            if second.elapsed() > Duration::from_secs(1) {
+                second = Instant::now();
+                q.update_display_data(&sp.name(), sent);
+                sent = 0;
+            }
+        }
+        let (packets, dropped) = metre_h264_take(Duration::from_millis(30));
+        if dropped {
+            log::warn!("metre-h264: fila acumulada descartada, pedindo quadro-chave");
+            wait_key = true;
+        }
+        if wait_key && last_key_request.elapsed() > Duration::from_secs(1) {
+            last_key_request = Instant::now();
+            metre_h264_cmd("metre_keyframe", "", "");
+        }
+        if packets.is_empty() {
+            if last_packet.elapsed() > Duration::from_secs(6) {
+                log::error!("metre-h264: sem pacotes há 6 s, voltando ao motor antigo");
+                METRE_H264_FAILED.store(true, std::sync::atomic::Ordering::Relaxed);
+                metre_h264_set(false, 0);
+                bail!("SWITCH");
+            }
+            continue;
+        }
+        last_packet = Instant::now();
+        let mut frames = Vec::new();
+        for p in packets {
+            if wait_key {
+                if !p.key {
+                    continue; // sem quadro-chave o técnico não decodifica os seguintes
+                }
+                wait_key = false;
+            }
+            st_frames += 1;
+            st_bytes += p.data.len();
+            frames.push(EncodedVideoFrame {
+                data: hbb_common::bytes::Bytes::from(p.data),
+                key: p.key,
+                pts: p.pts,
+                ..Default::default()
+            });
+        }
+        if frames.is_empty() {
+            continue;
+        }
+        let mut vf = VideoFrame::new();
+        vf.set_h264s(EncodedVideoFrames {
+            frames: frames.into(),
+            ..Default::default()
+        });
+        vf.display = display_idx as _;
+        let mut msg = Message::new();
+        msg.set_video_frame(vf);
+        sp.send_video_frame(msg);
+        sent += 1;
+        let secs = st_start.elapsed().as_secs_f32();
+        if secs >= 5.0 {
+            log::info!(
+                "metre-stats: motor H.264 direto, {:.1} quadros/s, {:.0} kbit/s, {w}x{h}",
+                st_frames as f32 / secs,
+                st_bytes as f32 * 8.0 / 1000.0 / secs
+            );
+            (st_frames, st_bytes, st_start) = (0, 0, Instant::now());
+        }
+    }
+    Ok(())
 }
 
 // Metre: quadros por segundo e tempo de conversão+codificação de cada quadro, registrados a cada 5 s

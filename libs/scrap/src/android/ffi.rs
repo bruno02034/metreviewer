@@ -534,3 +534,67 @@ fn call_document_storage(request: &str) -> hbb_common::ResultType<String> {
     }
     Ok(result?)
 }
+
+// Metre: pacotes H.264 prontos vindos do codificador do chip (MetreH264.kt, Surface direto da tela).
+// Ver METRE-CHANGES.md.
+pub struct MetreH264Packet {
+    pub data: Vec<u8>,
+    pub key: bool,
+    pub pts: i64,
+}
+
+lazy_static! {
+    static ref METRE_H264: Mutex<(std::collections::VecDeque<MetreH264Packet>, bool)> =
+        Mutex::new((Default::default(), false));
+}
+
+/// Fila acumulada (técnico lento ou núcleo atrasado): descarta tudo e pede quadro-chave, para a
+/// imagem não ficar atrasada.
+const METRE_H264_MAX_QUEUE: usize = 15;
+
+#[no_mangle]
+pub extern "system" fn Java_ffi_FFI_onH264Frame(
+    env: JNIEnv,
+    _class: JClass,
+    data: jni::objects::JByteArray,
+    key: jboolean,
+    pts: jni::sys::jlong,
+) {
+    let Ok(data) = env.convert_byte_array(&data) else {
+        return;
+    };
+    let mut q = METRE_H264.lock().unwrap();
+    if q.0.len() >= METRE_H264_MAX_QUEUE {
+        q.0.clear();
+        q.1 = true; // precisa de quadro-chave
+    }
+    q.0.push_back(MetreH264Packet {
+        data,
+        key: key != 0,
+        pts,
+    });
+}
+
+/// Espera até `timeout` por pacotes; devolve todos os disponíveis e se a fila foi descartada.
+pub fn metre_h264_take(timeout: Duration) -> (Vec<MetreH264Packet>, bool) {
+    let start = Instant::now();
+    loop {
+        {
+            let mut q = METRE_H264.lock().unwrap();
+            let dropped = std::mem::take(&mut q.1);
+            if !q.0.is_empty() || dropped {
+                return (q.0.drain(..).collect(), dropped);
+            }
+        }
+        if start.elapsed() >= timeout {
+            return (vec![], false);
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
+pub fn metre_h264_clear() {
+    let mut q = METRE_H264.lock().unwrap();
+    q.0.clear();
+    q.1 = false;
+}

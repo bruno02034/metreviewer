@@ -32,7 +32,7 @@ object MetreCompat {
         val logs = listOfNotNull(context.getExternalFilesDir(null), context.filesDir)
             .flatMap { it.walkTopDown().maxDepth(4).filter { f -> f.isFile && f.parentFile?.name == "Logs" }.toList() }
             .sortedBy { it.lastModified() }
-        val keys = listOf("metre-stats", "codec", "encoder", "hwcodec", "half_scale", "fps", "Connection closed", "ERROR")
+        val keys = listOf("metre-stats", "metre-h264", "codec", "encoder", "hwcodec", "half_scale", "fps", "Connection closed", "ERROR")
         logs.takeLast(2).flatMap { f -> try { f.readLines() } catch (e: Exception) { listOf("erro ao ler ${f.name}: $e") } }
             .filter { line -> keys.any { line.contains(it, true) } }
             .takeLast(60)

@@ -170,6 +170,22 @@ class MainService : Service() {
                 Log.d(logTag, "from rust:stop_capture")
                 stopCapture()
             }
+            // Metre: o núcleo liga/desliga o motor H.264 direto da tela e pede quadro-chave/taxa.
+            "metre_surface" -> {
+                val want = arg1.toBoolean()
+                arg2.toIntOrNull()?.let { MetreH264.kbps = it }
+                if (MetreH264.wanted != want || (want && !MetreH264.isRunning && isStart)) {
+                    MetreH264.wanted = want
+                    if (isStart) {
+                        stopCapture()
+                        startCapture()
+                    }
+                } else if (want) {
+                    MetreH264.requestKeyFrame()
+                }
+            }
+            "metre_keyframe" -> MetreH264.requestKeyFrame()
+            "metre_bitrate" -> arg1.toIntOrNull()?.let { MetreH264.setBitrate(it) }
             "half_scale" -> {
                 val halfScale = arg1.toBoolean()
                 if (isHalfScale != halfScale) {
@@ -617,9 +633,14 @@ class MainService : Service() {
         
         updateScreenInfo(resources.configuration.orientation)
         Log.d(logTag, "Start Capture")
-        surface = createSurface()
+        // Metre: com o motor H.264 direto da tela, a VirtualDisplay desenha no codificador do chip.
+        // Se ele não iniciar, segue pelo caminho antigo (ImageReader). Ver MetreH264.kt.
+        val metreSurface = if (MetreH264.wanted) MetreH264.start(SCREEN_INFO.width, SCREEN_INFO.height) else null
+        surface = metreSurface ?: createSurface()
 
-        val videoStarted = if (useVP9) {
+        val videoStarted = if (metreSurface != null) {
+            createOrSetVirtualDisplay(mediaProjection!!, metreSurface)
+        } else if (useVP9) {
             startVP9VideoRecorder(mediaProjection!!)
         } else {
             startRawVideoRecorder(mediaProjection!!)
@@ -652,6 +673,7 @@ class MainService : Service() {
     private fun releaseFailedVideoCapture() {
         imageReader?.close()
         imageReader = null
+        MetreH264.stop()
         videoEncoder?.let {
             it.signalEndOfInputStream()
             it.stop()
@@ -683,6 +705,7 @@ class MainService : Service() {
         // https://github.com/rustdesk/rustdesk/issues/4118#issuecomment-1515666629
         imageReader?.close()
         imageReader = null
+        MetreH264.stop()
         videoEncoder?.let {
             it.signalEndOfInputStream()
             it.stop()

@@ -18,6 +18,8 @@ object FFI {
     external fun startServer(app_dir: String, home_dir: String, custom_client_config: String)
     external fun startService()
     external fun onVideoFrameUpdate(buf: ByteBuffer)
+    // Metre: pacote H.264 pronto do codificador do chip (MetreH264.kt)
+    external fun onH264Frame(data: ByteArray, key: Boolean, ptsMs: Long)
     external fun onAudioFrameUpdate(buf: ByteBuffer)
     external fun translateLocale(localeName: String, input: String): String
     external fun refreshScreen()
