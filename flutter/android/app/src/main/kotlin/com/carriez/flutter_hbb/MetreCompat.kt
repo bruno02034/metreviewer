@@ -21,6 +21,18 @@ object MetreCompat {
         appendLine("Captura ativa: ${MainService.isReady}, controle ativo: ${InputService.isOpen}")
         appendLine("Codificadores de vídeo:")
         codecReport.distinct().forEach { appendLine("  $it") }
+        appendLine()
+        appendLine("Log (vídeo e codificação, mais recentes por último):")
+        // logs ficam no armazenamento privado do app: <files>/<nome do app>/Logs
+        val logs = listOfNotNull(context.getExternalFilesDir(null), context.filesDir)
+            .flatMap { it.walkTopDown().maxDepth(4).filter { f -> f.isFile && f.parentFile?.name == "Logs" }.toList() }
+            .sortedBy { it.lastModified() }
+        val keys = listOf("metre-stats", "codec", "encoder", "hwcodec", "half_scale", "fps", "Connection closed", "ERROR")
+        logs.takeLast(2).flatMap { f -> try { f.readLines() } catch (e: Exception) { listOf("erro ao ler ${f.name}: $e") } }
+            .filter { line -> keys.any { line.contains(it, true) } }
+            .takeLast(60)
+            .forEach { appendLine(it.take(300)) }
+        if (logs.isEmpty()) appendLine("  (nenhum arquivo de log encontrado)")
     }
 
     // Verificação periódica: se o Android matar o serviço, o BootReceiver o sobe de novo.

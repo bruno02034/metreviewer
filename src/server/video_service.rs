@@ -1274,6 +1274,34 @@ fn refresh_allowed(unfed: bool, warmed_up: bool, latency_free: bool) -> bool {
 }
 
 #[inline]
+// Metre: quadros por segundo e tempo de conversão+codificação de cada quadro, registrados a cada 5 s
+// ("metre-stats" no log; aparece na aba Diagnóstico do M10). Ver METRE-CHANGES.md.
+static METRE_ENCODE: std::sync::Mutex<(u32, u128, u128, Option<Instant>)> =
+    std::sync::Mutex::new((0, 0, 0, None));
+
+fn metre_encode_stats(took: Duration, width: usize, height: usize, hardware: bool) {
+    let Ok(mut s) = METRE_ENCODE.lock() else { return };
+    let us = took.as_micros();
+    s.0 += 1;
+    s.1 += us;
+    s.2 = s.2.max(us);
+    let since = *s.3.get_or_insert_with(Instant::now);
+    let secs = since.elapsed().as_secs_f32();
+    if secs >= 5.0 {
+        log::info!(
+            "metre-stats: {:.1} quadros/s, codificar media {:.1} ms, max {:.1} ms, {}x{}, codec {:?}, hardware {}",
+            s.0 as f32 / secs,
+            s.1 as f32 / s.0 as f32 / 1000.0,
+            s.2 as f32 / 1000.0,
+            width,
+            height,
+            Encoder::negotiated_codec(),
+            hardware
+        );
+        *s = (0, 0, 0, Some(Instant::now()));
+    }
+}
+
 fn handle_one_frame(
     display: usize,
     sp: &GenericService,
@@ -1300,7 +1328,10 @@ fn handle_one_frame(
     let mut vpx_no_output = false;
     let first = *first_frame;
     *first_frame = false;
-    match encoder.encode_to_message(frame, ms) {
+    let encode_start = Instant::now();
+    let encoded = encoder.encode_to_message(frame, ms);
+    metre_encode_stats(encode_start.elapsed(), width, height, encoder.is_hardware());
+    match encoded {
         Ok(mut vf) => {
             *encode_fail_counter = 0;
             *encoder_warmed_up = true;
