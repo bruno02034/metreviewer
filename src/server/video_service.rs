@@ -1273,7 +1273,6 @@ fn refresh_allowed(unfed: bool, warmed_up: bool, latency_free: bool) -> bool {
     !cfg!(target_os = "macos") || unfed || warmed_up || latency_free
 }
 
-#[inline]
 // Metre: quadros por segundo e tempo de conversão+codificação de cada quadro, registrados a cada 5 s
 // ("metre-stats" no log; aparece na aba Diagnóstico do M10). Ver METRE-CHANGES.md.
 static METRE_ENCODE: std::sync::Mutex<(u32, u128, u128, Option<Instant>)> =
@@ -1302,6 +1301,7 @@ fn metre_encode_stats(took: Duration, width: usize, height: usize, hardware: boo
     }
 }
 
+#[inline]
 fn handle_one_frame(
     display: usize,
     sp: &GenericService,
