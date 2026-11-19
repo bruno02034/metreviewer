@@ -153,20 +153,19 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
     return ChangeNotifierProvider.value(
       value: gFFI.serverModel,
       child: Consumer<ServerModel>(builder: (context, model, _) {
+        // Metre: no primeiro uso, só o que o atendimento exige (ver a tela e tocar). Bateria,
+        // sobreposição e autoinício do fabricante servem para o suporte continuar disponível com o
+        // app fechado ou depois de reiniciar: aparecem como opcionais depois. Ver METRE-CHANGES.md.
         final steps = <_Step>[
-          if (!_keepAlive)
-            _Step(
-                Icons.battery_charging_full,
-                'Manter o suporte sempre ligado',
-                'Para o suporte continuar disponível com a tela apagada e depois de reiniciar. '
-                    'Nas telas seguintes, toque em "Permitir" e ative a chave do MetreViewer.',
-                _grantKeepAlive),
           if (!model.mediaOk)
             _Step(
                 Icons.screen_share_outlined,
                 'Confirmação do Android para mostrar a tela',
-                'O Android exige que você confirme uma vez. Marque "Não mostrar novamente" '
-                    'e toque em "Iniciar agora".',
+                androidVersion < 29
+                    ? 'O Android exige que você confirme uma vez. Marque "Não mostrar novamente" '
+                        'e toque em "Iniciar agora".'
+                    : 'O Android pede esta confirmação para mostrar a tela ao técnico. '
+                        'Toque em "Iniciar agora".',
                 _grantScreen),
           if (!model.inputOk)
             androidVersion >= 33 &&
@@ -186,11 +185,20 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
                     'Na próxima tela, toque em "MetreViewer Input" e ative a chave. '
                         'Sem isso o técnico só consegue olhar, sem operar o aparelho.',
                     _grantInput),
+        ];
+        final optional = <_Step>[
+          if (!_keepAlive)
+            _Step(
+                Icons.battery_charging_full,
+                'Manter o suporte disponível com o app fechado',
+                'Opcional. Para o técnico conseguir acessar depois de reiniciar ou com a tela '
+                    'apagada. Nas telas seguintes, toque em "Permitir" e ative o MetreViewer.',
+                _grantKeepAlive),
           if (_autostartScreen)
             _Step(
                 Icons.restart_alt,
                 'Iniciar junto com o aparelho',
-                'Este aparelho tem uma tela própria do fabricante para isso. '
+                'Opcional. Este aparelho tem uma tela própria do fabricante para isso. '
                     'Na próxima tela, ative o MetreViewer.',
                 _openAutostart),
         ];
@@ -214,6 +222,9 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
                     if (steps.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       _stepsCard(context, steps),
+                    ] else if (optional.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _stepsCard(context, optional, optional: true),
                     ],
                     if (model.clients.isNotEmpty) ...[
                       const SizedBox(height: 16),
@@ -319,10 +330,17 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
     );
   }
 
-  Widget _stepsCard(BuildContext context, List<_Step> steps) => MetreCard(
+  Widget _stepsCard(BuildContext context, List<_Step> steps,
+          {bool optional = false}) =>
+      MetreCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           // Metre: só o próximo passo; os outros aparecem quando este for concluído
-          Text(steps.length == 1 ? 'Último passo' : 'Próximo passo (faltam ${steps.length})',
+          Text(
+              optional
+                  ? 'Opcional'
+                  : steps.length == 1
+                      ? 'Último passo'
+                      : 'Próximo passo (faltam ${steps.length})',
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           for (var i = 0; i < 1; i++)

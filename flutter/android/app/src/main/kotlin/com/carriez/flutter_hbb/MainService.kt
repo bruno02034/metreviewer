@@ -954,6 +954,9 @@ class MainService : Service() {
     }
 
     private fun setMicrophoneForegroundService(enabled: Boolean): Boolean {
+        // Metre: o suporte não usa áudio; sem RECORD_AUDIO e sem o tipo "microphone" no manifesto
+        // (menos declarações na Google Play). Recusar aqui faz a chamada de voz falhar sem travar.
+        if (enabled) return false
         return updateForegroundServiceTypes(mediaProjectionForegroundService, enabled)
     }
 
