@@ -30,6 +30,8 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
   bool _keepAlive = true; // até a primeira verificação, não mostra o passo à toa
   bool _autostartScreen = false; // o fabricante tem tela própria de "iniciar automaticamente"
   bool _busy = false;
+  // Android 13+: "Configuração restrita" ativa para este app (lido do sistema, ver MetreCompat.kt)
+  bool _restricted = false;
 
   @override
   void initState() {
@@ -64,11 +66,14 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
 
   Future<void> _refresh({bool autoStart = false}) async {
     final keepAlive = await gFFI.serverModel.metreKeepAliveOk();
+    final restricted = androidVersion >= 33 &&
+        await gFFI.invokeMethodWithResult<String>('metre_restricted') == 'sim';
     final autostart = bind.mainGetLocalOption(key: _kAutostartDone) != 'Y' &&
         await gFFI.invokeMethod("metre_autostart", "check") == true;
     if (!mounted) return;
     setState(() {
       _keepAlive = keepAlive;
+      _restricted = restricted;
       _autostartScreen = autostart;
     });
     gFFI.invokeMethod("check_service");
@@ -168,8 +173,9 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
                         'Toque em "Iniciar agora".',
                 _grantScreen),
           if (!model.inputOk)
-            androidVersion >= 33 &&
-                    bind.mainGetLocalOption(key: _kA11yTried) == 'Y'
+            _restricted ||
+                    (androidVersion >= 33 &&
+                        bind.mainGetLocalOption(key: _kA11yTried) == 'Y')
                 ? _Step(
                     Icons.touch_app_outlined,
                     'Permitir que o técnico toque na tela',

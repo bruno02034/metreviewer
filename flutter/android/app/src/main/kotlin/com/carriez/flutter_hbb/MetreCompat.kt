@@ -49,11 +49,33 @@ object MetreCompat {
         "sinal ${i.rssi} dBm, ${i.linkSpeed} Mbps, ${i.frequency} MHz, sem economia: ${wifiLock?.isHeld == true}"
     } catch (e: Exception) { "indisponível ($e)" }
 
+    // Android 13+: "Configuração restrita" é a operação de app "android:access_restricted_settings"
+    // em modo ERRORED, posta pelo sistema em apps instalados a partir de um arquivo. Ler o próprio
+    // estado é permitido (unsafeCheckOpNoThrow, API 29). "sim" / "não" / "n/a" (Android < 13).
+    fun restrictedSettings(context: Context): String {
+        if (Build.VERSION.SDK_INT < 33) return "n/a"
+        return try {
+            val ops = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+            val mode = ops.unsafeCheckOpNoThrow("android:access_restricted_settings",
+                context.applicationInfo.uid, context.packageName)
+            if (mode == android.app.AppOpsManager.MODE_ERRORED) "sim" else "não"
+        } catch (e: Exception) { "desconhecido" }
+    }
+
+    private fun installSource(context: Context): String = try {
+        if (Build.VERSION.SDK_INT >= 30) {
+            val i = context.packageManager.getInstallSourceInfo(context.packageName)
+            val src = if (Build.VERSION.SDK_INT >= 33) " origem=${i.packageSource}" else ""
+            "instalador=${i.installingPackageName} iniciador=${i.initiatingPackageName}$src"
+        } else "instalador=${context.packageManager.getInstallerPackageName(context.packageName)}"
+    } catch (e: Exception) { "desconhecido ($e)" }
+
     fun diagnostics(context: Context): String = buildString {
         appendLine("Aparelho: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.HARDWARE}), Android ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT}")
         appendLine("Processador: ${Build.SUPPORTED_ABIS.joinToString()}, núcleos: ${Runtime.getRuntime().availableProcessors()}")
         appendLine("Captura ativa: ${MainService.isReady}, controle ativo: ${InputService.isOpen}")
         appendLine("Wi-Fi: ${wifiInfo(context)}")
+        appendLine("Instalação: ${installSource(context)}; configuração restrita: ${restrictedSettings(context)}")
         appendLine("Codificadores de vídeo:")
         codecReport.distinct().forEach { appendLine("  $it") }
         appendLine()

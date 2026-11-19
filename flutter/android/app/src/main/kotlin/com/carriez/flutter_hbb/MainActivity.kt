@@ -356,6 +356,7 @@ class MainActivity : FlutterActivity() {
                     result.success(intent != null)
                 }
                 "metre_diag" -> result.success(MetreCompat.diagnostics(context))
+                "metre_restricted" -> result.success(MetreCompat.restrictedSettings(context))
                 "check_service" -> {
                     Companion.flutterMethodChannel?.invokeMethod(
                         "on_state_changed",

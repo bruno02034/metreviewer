@@ -925,3 +925,46 @@ jobs:
           tag_name: ${{ env.TAG_NAME }}
           files: |
             signed-aab/metreviewer-${{ env.VERSION }}.aab
+
+  # Metre: "Metre Instalador" (prova de conceito, ver metre-installer/). Instala o MetreViewer por
+  # sessão do PackageInstaller, o que no Android 13+ não recebe a "Configuração restrita".
+  build-metre-installer:
+    name: build metre installer apk
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Build and sign
+        if: env.ANDROID_SIGNING_KEY != null
+        shell: bash
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+          KS_B64: ${{ secrets.ANDROID_SIGNING_KEY }}
+          KS_ALIAS: ${{ secrets.ANDROID_ALIAS }}
+          KS_PASS: ${{ secrets.ANDROID_KEY_STORE_PASSWORD }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          sudo apt-get update && sudo apt-get install -y openjdk-17-jdk-headless
+          export PATH=/usr/lib/jvm/java-17-openjdk-amd64/bin:$PATH
+          wget -q https://services.gradle.org/distributions/gradle-8.11.1-bin.zip -O $RUNNER_TEMP/g.zip
+          unzip -q $RUNNER_TEMP/g.zip -d $RUNNER_TEMP
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          echo "sdk.dir=$ANDROID_HOME" > metre-installer/local.properties
+          (cd metre-installer && $RUNNER_TEMP/gradle-8.11.1/bin/gradle --no-daemon assembleRelease)
+          BT=$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | tail -n 1)
+          KS=$RUNNER_TEMP/k.jks; echo "$KS_B64" | base64 -d > $KS
+          mkdir -p out
+          $BT/zipalign -p -f 4 metre-installer/app/build/outputs/apk/release/app-release-unsigned.apk out/aligned.apk
+          $BT/apksigner sign --ks $KS --ks-key-alias "$KS_ALIAS" --ks-pass env:KS_PASS --key-pass env:KEY_PASS --out out/metre-instalador.apk out/aligned.apk
+          rm -f $KS
+          $BT/apksigner verify --print-certs out/metre-instalador.apk | head -3
+
+      - name: Publish installer
+        if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
+        with:
+          prerelease: true
+          tag_name: ${{ env.TAG_NAME }}
+          files: |
+            out/metre-instalador.apk
