@@ -286,10 +286,11 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
 
   Widget _stepsCard(BuildContext context, List<_Step> steps) => MetreCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Configuração (só uma vez)',
+          // Metre: só o próximo passo; os outros aparecem quando este for concluído
+          Text(steps.length == 1 ? 'Último passo' : 'Próximo passo (faltam ${steps.length})',
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
-          for (var i = 0; i < steps.length; i++)
+          for (var i = 0; i < 1; i++)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
