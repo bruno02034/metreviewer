@@ -39,7 +39,7 @@ echo "$MAN" | grep -q 'android:debuggable="true"' && bad "app marcado como depur
 MIN=$(attr 'android:minSdkVersion'); TGT=$(attr 'android:targetSdkVersion')
 [ "${MIN:-99}" -le 24 ] && ok "minSdk $MIN (Android 7 = API 24 incluso)" || bad "minSdk $MIN exclui o Android 7"
 [ "${TGT:-0}" -ge 36 ] && ok "targetSdk $TGT (Play exige 36 desde 31/08/2026)" || bad "targetSdk $TGT < 36"
-for p in RECORD_AUDIO FOREGROUND_SERVICE_MICROPHONE MANAGE_EXTERNAL_STORAGE; do
+for p in RECORD_AUDIO FOREGROUND_SERVICE_MICROPHONE MANAGE_EXTERNAL_STORAGE CAMERA; do
   echo "$MAN" | grep -q "android.permission.$p\"" && bad "permissão $p presente" || ok "sem $p"
 done
 
