@@ -15,6 +15,8 @@ import 'server_page.dart';
 import 'settings_page.dart';
 
 const _kAutostartDone = 'metre-autostart-done';
+// Já mandamos o cliente para a tela de Acessibilidade uma vez (ver _grantInput)
+const _kA11yTried = 'metre-a11y-tried';
 
 class MetrePdvPage extends StatefulWidget {
   const MetrePdvPage({super.key});
@@ -94,8 +96,17 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
 
   Future<void> _grantScreen() => gFFI.serverModel.startService();
 
-  Future<void> _grantInput() async =>
-      AndroidPermissionManager.startAction(kActionAccessibilitySettings);
+  Future<void> _grantInput() async {
+    await bind.mainSetLocalOption(key: _kA11yTried, value: 'Y');
+    AndroidPermissionManager.startAction(kActionAccessibilitySettings);
+  }
+
+  // Android 13+: app instalado por arquivo APK tem a Acessibilidade bloqueada ("Configuração
+  // restrita") até o cliente liberar em Informações do app > ⋮ > "Permitir configurações
+  // restritas". Não há API pública para saber se o bloqueio está ativo: depois da primeira
+  // tentativa sem sucesso, a orientação e o atalho aparecem. Ver METRE-CHANGES.md.
+  Future<void> _openAppInfo() async =>
+      AndroidPermissionManager.startAction('android.settings.APPLICATION_DETAILS_SETTINGS');
 
   Future<void> _openAutostart() async {
     await gFFI.invokeMethod("metre_autostart", "open");
@@ -123,12 +134,23 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
                     'e toque em "Iniciar agora".',
                 _grantScreen),
           if (!model.inputOk)
-            _Step(
-                Icons.touch_app_outlined,
-                'Permitir que o técnico toque na tela',
-                'Na próxima tela, toque em "MetreViewer Input" e ative a chave. '
-                    'Sem isso o técnico só consegue olhar, sem operar o aparelho.',
-                _grantInput),
+            androidVersion >= 33 &&
+                    bind.mainGetLocalOption(key: _kA11yTried) == 'Y'
+                ? _Step(
+                    Icons.touch_app_outlined,
+                    'Permitir que o técnico toque na tela',
+                    'Se o Android mostrou "Configuração restrita": toque em Liberar, depois em ⋮ '
+                        '(canto de cima) e em "Permitir configurações restritas". '
+                        'Volte aqui, toque em Ativar e ligue "MetreViewer Input".',
+                    _grantInput,
+                    extraLabel: 'Liberar',
+                    extraAction: _openAppInfo)
+                : _Step(
+                    Icons.touch_app_outlined,
+                    'Permitir que o técnico toque na tela',
+                    'Na próxima tela, toque em "MetreViewer Input" e ative a chave. '
+                        'Sem isso o técnico só consegue olhar, sem operar o aparelho.',
+                    _grantInput),
           if (_autostartScreen)
             _Step(
                 Icons.restart_alt,
@@ -286,6 +308,17 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
                       ]),
                 ),
                 const SizedBox(width: 12),
+                if (steps[i].extraAction != null) ...[
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 18, vertical: 14)),
+                    onPressed:
+                        _busy ? null : () => _run(steps[i].extraAction!),
+                    child: Text(steps[i].extraLabel ?? ''),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                       backgroundColor: i == 0 ? MetreColors.orange : null,
@@ -304,7 +337,10 @@ class _Step {
   final IconData icon;
   final String title, why;
   final Future<void> Function() action;
-  _Step(this.icon, this.title, this.why, this.action);
+  final String? extraLabel;
+  final Future<void> Function()? extraAction;
+  _Step(this.icon, this.title, this.why, this.action,
+      {this.extraLabel, this.extraAction});
 }
 
 /// Telas originais do app, para o técnico em campo.
