@@ -3198,6 +3198,11 @@ impl Connection {
                     if self.is_authed_view_camera_conn() {
                         return true;
                     }
+                    // Metre: soltar o botão (2) ou roda (3) dispara o gesto no Android; mede toque→tela
+                    #[cfg(target_os = "android")]
+                    if matches!(me.mask & 0x7, 2 | 3) {
+                        scrap::android::ffi::metre_mark_input();
+                    }
                     #[cfg(any(target_os = "android", target_os = "ios"))]
                     if let Err(e) = call_main_service_pointer_input("mouse", me.mask, me.x, me.y) {
                         log::debug!("call_main_service_pointer_input fail:{}", e);
@@ -3319,6 +3324,10 @@ impl Connection {
 
                     match encode_result {
                         Ok(data) => {
+                            #[cfg(target_os = "android")]
+                            if me.down || me.press {
+                                scrap::android::ffi::metre_mark_input();
+                            }
                             let result = call_main_service_key_event(&data);
                             if let Err(e) = result {
                                 log::debug!("call_main_service_key_event fail: {}", e);

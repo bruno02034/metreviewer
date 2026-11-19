@@ -735,6 +735,8 @@ fn run(vs: VideoService) -> ResultType<()> {
     let mut mid_data = Vec::new();
     let mut repeat_encode_counter = 0;
     let repeat_encode_max = 10;
+    // Metre: ms do quadro novo mais recente que o codificador ainda não devolveu
+    let mut metre_pending: Option<i64> = None;
     let mut encode_fail_counter = 0;
     let mut first_frame = true;
     // Set once the encoder emits its first packet; until then it may legitimately return nothing.
@@ -875,6 +877,8 @@ fn run(vs: VideoService) -> ResultType<()> {
                     }
 
                     let frame = frame.to(encoder.yuvfmt(), &mut yuv, &mut mid_data)?;
+                    metre_pending = Some(ms);
+                    metre_stats(|s| s.real += 1);
                     static_refresh.on_frame(&frame);
                     let result = handle_one_frame(
                         display_idx,
@@ -1028,12 +1032,46 @@ fn run(vs: VideoService) -> ResultType<()> {
             }
         }
         DISPLAY_CONN_IDS.lock().unwrap().remove(&display_idx);
+        if !frame_controller.send_conn_ids.is_empty() {
+            // quanto o envio segurou o laço (TCP cheio = rede não está dando conta)
+            let w = wait_begin.elapsed().as_micros();
+            metre_stats(|s| {
+                s.wait_n += 1;
+                s.wait_us_sum += w;
+                s.wait_us_max = s.wait_us_max.max(w);
+            });
+        }
+        if let Some(p) = metre_pending {
+            if METRE_LAST_OUT_PTS.load(std::sync::atomic::Ordering::Relaxed) >= p {
+                let d = start.elapsed().as_millis() as i64 - p;
+                metre_stats(|s| {
+                    s.pipe_n += 1;
+                    s.pipe_sum += d;
+                    s.pipe_max = s.pipe_max.max(d);
+                });
+                metre_pending = None;
+            }
+        }
+        metre_stats_tick(spf, capture_width, capture_height, encoder.is_hardware());
 
         let elapsed = now.elapsed();
         // may need to enable frame(timeout)
         log::trace!("{:?} {:?}", time::Instant::now(), elapsed);
-        if elapsed < spf {
-            std::thread::sleep(spf - elapsed);
+        // Metre: o codificador do chip (MediaCodec) devolve o quadro só depois de receber outros; o
+        // laço repete o último quadro para empurrá-lo, mas esperava um intervalo inteiro (1/fps)
+        // entre cada repetição: a imagem nova chegava 2-3 intervalos depois. Enquanto o quadro novo
+        // não sai, repete em 8 ms. Ver METRE-CHANGES.md.
+        let pause = if cfg!(target_os = "android")
+            && metre_pending.is_some()
+            && !encoder.latency_free()
+            && repeat_encode_counter < repeat_encode_max
+        {
+            spf.min(Duration::from_millis(8))
+        } else {
+            spf
+        };
+        if elapsed < pause {
+            std::thread::sleep(pause - elapsed);
         }
     }
 
@@ -1442,32 +1480,93 @@ fn metre_h264_run(sp: &GenericService, display_idx: usize, c: &CapturerInfo) -> 
     Ok(())
 }
 
-// Metre: quadros por segundo e tempo de conversão+codificação de cada quadro, registrados a cada 5 s
-// ("metre-stats" no log; aparece na aba Diagnóstico do M10). Ver METRE-CHANGES.md.
-static METRE_ENCODE: std::sync::Mutex<(u32, u128, u128, Option<Instant>)> =
-    std::sync::Mutex::new((0, 0, 0, None));
+// Metre: medição por etapa, uma linha "metre-stats" a cada 5 s (aba Diagnóstico do M10 e telemetria).
+// Antes só se contava chamadas ao codificador; no Android elas incluem as repetições do último quadro
+// (codificador do chip segura quadros), então "quadros/s" não era a fluidez real. Ver METRE-CHANGES.md.
+#[derive(Default)]
+struct MetreStats {
+    since: Option<Instant>,
+    calls: u32,
+    enc_us_sum: u128,
+    enc_us_max: u128,
+    out: u32,
+    bytes: usize,
+    real: u32,
+    pipe_n: u32,
+    pipe_sum: i64,
+    pipe_max: i64,
+    wait_n: u32,
+    wait_us_sum: u128,
+    wait_us_max: u128,
+}
 
-fn metre_encode_stats(took: Duration, width: usize, height: usize, hardware: bool) {
-    let Ok(mut s) = METRE_ENCODE.lock() else { return };
-    let us = took.as_micros();
-    s.0 += 1;
-    s.1 += us;
-    s.2 = s.2.max(us);
-    let since = *s.3.get_or_insert_with(Instant::now);
-    let secs = since.elapsed().as_secs_f32();
-    if secs >= 5.0 {
-        log::info!(
-            "metre-stats: {:.1} quadros/s, codificar media {:.1} ms, max {:.1} ms, {}x{}, codec {:?}, hardware {}",
-            s.0 as f32 / secs,
-            s.1 as f32 / s.0 as f32 / 1000.0,
-            s.2 as f32 / 1000.0,
-            width,
-            height,
-            Encoder::negotiated_codec(),
-            hardware
-        );
-        *s = (0, 0, 0, Some(Instant::now()));
+static METRE_STATS: std::sync::Mutex<Option<MetreStats>> = std::sync::Mutex::new(None);
+// pts do último pacote que saiu do codificador
+static METRE_LAST_OUT_PTS: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(-1);
+
+fn metre_stats<F: FnOnce(&mut MetreStats)>(f: F) {
+    if let Ok(mut s) = METRE_STATS.lock() {
+        f(s.get_or_insert_with(Default::default));
     }
+}
+
+fn metre_encode_stats(took: Duration, out_bytes: Option<usize>) {
+    metre_stats(|s| {
+        let us = took.as_micros();
+        s.calls += 1;
+        s.enc_us_sum += us;
+        s.enc_us_max = s.enc_us_max.max(us);
+        if let Some(b) = out_bytes {
+            s.out += 1;
+            s.bytes += b;
+        }
+    });
+}
+
+fn metre_stats_tick(spf: Duration, width: usize, height: usize, hardware: bool) {
+    metre_stats(|s| {
+        let since = *s.since.get_or_insert_with(Instant::now);
+        let secs = since.elapsed().as_secs_f32();
+        if secs < 5.0 {
+            return;
+        }
+        #[cfg(target_os = "android")]
+        let (cap, in_n, in_sum, in_max, in_none) = scrap::android::ffi::metre_take_capture_stats();
+        #[cfg(not(target_os = "android"))]
+        let (cap, in_n, in_sum, in_max, in_none) = (0u32, 0u32, 0i64, 0i64, 0u32);
+        let avg = |sum: f64, n: u32| if n > 0 { sum / n as f64 } else { 0.0 };
+        if s.calls > 0 || cap > 0 || in_n > 0 {
+            let line = format!(
+                "metre-stats: tela {:.1} q/s, novos {:.1} q/s, envios {:.1} q/s, {:.0} kbit/s | codificar {:.1}/{:.1} ms, atraso no codificador {:.0}/{} ms | espera rede {:.0}/{:.0} ms | toque->tela {:.0}/{} ms (n={}, sem mudanca {}) | alvo {:.0} q/s, {}x{}, {:?}, hardware {}",
+                cap as f32 / secs,
+                s.real as f32 / secs,
+                s.out as f32 / secs,
+                s.bytes as f32 * 8.0 / 1000.0 / secs,
+                avg(s.enc_us_sum as f64, s.calls) / 1000.0,
+                s.enc_us_max as f64 / 1000.0,
+                avg(s.pipe_sum as f64, s.pipe_n),
+                s.pipe_max,
+                avg(s.wait_us_sum as f64, s.wait_n) / 1000.0,
+                s.wait_us_max as f64 / 1000.0,
+                avg(in_sum as f64, in_n),
+                in_max,
+                in_n,
+                in_none,
+                1.0 / spf.as_secs_f32().max(0.001),
+                width,
+                height,
+                Encoder::negotiated_codec(),
+                hardware
+            );
+            log::info!("{}", line);
+            #[cfg(target_os = "android")]
+            metre_telemetry_push(line);
+        }
+        *s = MetreStats {
+            since: Some(Instant::now()),
+            ..Default::default()
+        };
+    });
 }
 
 #[inline]
@@ -1499,7 +1598,21 @@ fn handle_one_frame(
     *first_frame = false;
     let encode_start = Instant::now();
     let encoded = encoder.encode_to_message(frame, ms);
-    metre_encode_stats(encode_start.elapsed(), width, height, encoder.is_hardware());
+    match &encoded {
+        Ok(vf) => {
+            let (mut bytes, mut pts) = (0usize, -1i64);
+            use hbb_common::message_proto::video_frame::Union as VU;
+            if let Some(VU::H264s(f) | VU::H265s(f) | VU::Vp8s(f) | VU::Vp9s(f) | VU::Av1s(f)) = &vf.union {
+                for p in f.frames.iter() {
+                    bytes += p.data.len();
+                    pts = pts.max(p.pts);
+                }
+            }
+            METRE_LAST_OUT_PTS.store(pts, std::sync::atomic::Ordering::Relaxed);
+            metre_encode_stats(encode_start.elapsed(), Some(bytes));
+        }
+        Err(_) => metre_encode_stats(encode_start.elapsed(), None),
+    }
     match encoded {
         Ok(mut vf) => {
             *encode_fail_counter = 0;
@@ -1788,5 +1901,55 @@ mod tests {
         assert!(refresh_allowed(false, false, true));
         // Nothing fed yet: no warm-up to lose, and a refresh can restart a stalled capturer.
         assert!(refresh_allowed(true, false, false));
+    }
+}
+
+// Metre: telemetria do M10. As linhas "metre-stats" vão para a Metre API (POST
+// /api/metre/telemetry, mesmo vínculo id+uuid do heartbeat) a cada ~15 s, para medir a sessão real
+// sem depender de foto da tela do PDV. Fila limitada: sem rede, as mais antigas são descartadas.
+#[cfg(target_os = "android")]
+fn metre_telemetry_push(line: String) {
+    use std::sync::mpsc;
+    static TX: std::sync::OnceLock<std::sync::Mutex<mpsc::SyncSender<String>>> =
+        std::sync::OnceLock::new();
+    let tx = TX.get_or_init(|| {
+        let (tx, rx) = mpsc::sync_channel::<String>(20);
+        std::thread::spawn(move || {
+            let Ok(rt) = hbb_common::tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            else {
+                return;
+            };
+            loop {
+                let Ok(first) = rx.recv() else { return };
+                std::thread::sleep(Duration::from_secs(15));
+                let mut lines = vec![first];
+                while let Ok(l) = rx.try_recv() {
+                    lines.push(l);
+                }
+                let api = crate::get_api_server(
+                    Config::get_option("api-server"),
+                    Config::get_option("custom-rendezvous-server"),
+                );
+                if api.is_empty() {
+                    continue;
+                }
+                let body = serde_json::json!({
+                    "id": Config::get_id(),
+                    "uuid": crate::encode64(hbb_common::get_uuid()),
+                    "lines": lines,
+                })
+                .to_string();
+                let url = format!("{}/api/metre/telemetry", api);
+                if let Err(e) = rt.block_on(crate::post_request(url, body, "")) {
+                    log::debug!("metre telemetria: {}", e);
+                }
+            }
+        });
+        std::sync::Mutex::new(tx)
+    });
+    if let Ok(tx) = tx.lock() {
+        let _ = tx.try_send(line);
     }
 }

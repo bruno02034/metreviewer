@@ -32,7 +32,10 @@ lazy_static! {
     static ref CLIPBOARDS_CLIENT: Mutex<Option<MultiClipboards>> = Mutex::new(None);
 }
 
-const MAX_VIDEO_FRAME_TIMEOUT: Duration = Duration::from_millis(100);
+// Metre: era 100 ms. O Android só manda quadro quando a tela muda, então o que está esperando é
+// sempre a imagem atual; com o laço a menos de 10 quadros/s a última mudança da tela era descartada
+// e o técnico via a tela antiga até a próxima mudança. Ver METRE-CHANGES.md.
+const MAX_VIDEO_FRAME_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_AUDIO_FRAME_TIMEOUT: Duration = Duration::from_millis(1000);
 
 struct FrameRaw {
@@ -71,6 +74,9 @@ impl FrameRaw {
         self.data.extend_from_slice(src);
         self.ready = true;
         self.last_update = Instant::now();
+        if self.name == "video" {
+            metre_on_captured();
+        }
     }
 
     fn take<'a>(&mut self, dst: &mut Vec<u8>, last: &mut Vec<u8>) -> Option<()> {
@@ -597,4 +603,63 @@ pub fn metre_h264_clear() {
     let mut q = METRE_H264.lock().unwrap();
     q.0.clear();
     q.1 = false;
+}
+
+// Metre: medições da captura (ver METRE-CHANGES.md).
+// - quadros que o Android entregou (a tela mudou);
+// - toque→tela: do comando do técnico chegar ao primeiro quadro novo depois dele. Inclui o envio do
+//   gesto pela Acessibilidade, o app do PDV redesenhar e o Android compor a tela.
+use std::sync::atomic::{AtomicI64, AtomicU32, Ordering};
+static METRE_CAPTURED: AtomicU32 = AtomicU32::new(0);
+static METRE_INPUT_AT: AtomicI64 = AtomicI64::new(0);
+static METRE_INPUT_N: AtomicU32 = AtomicU32::new(0);
+static METRE_INPUT_SUM: AtomicI64 = AtomicI64::new(0);
+static METRE_INPUT_MAX: AtomicI64 = AtomicI64::new(0);
+static METRE_INPUT_NO_CHANGE: AtomicU32 = AtomicU32::new(0);
+const METRE_INPUT_GIVE_UP_MS: i64 = 3000;
+
+fn metre_now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+fn metre_on_captured() {
+    METRE_CAPTURED.fetch_add(1, Ordering::Relaxed);
+    let at = METRE_INPUT_AT.swap(0, Ordering::Relaxed);
+    if at > 0 {
+        let lat = metre_now_ms() - at;
+        if lat > METRE_INPUT_GIVE_UP_MS {
+            // o comando não mudou a tela (toque em área vazia): não é atraso
+            METRE_INPUT_NO_CHANGE.fetch_add(1, Ordering::Relaxed);
+        } else {
+            METRE_INPUT_N.fetch_add(1, Ordering::Relaxed);
+            METRE_INPUT_SUM.fetch_add(lat, Ordering::Relaxed);
+            METRE_INPUT_MAX.fetch_max(lat, Ordering::Relaxed);
+        }
+    }
+}
+
+/// Chamado quando um comando do técnico (soltar o botão, tecla) chega ao M10. Mede a partir do
+/// mais antigo ainda sem resposta na tela.
+pub fn metre_mark_input() {
+    let now = metre_now_ms();
+    let _ = METRE_INPUT_AT.compare_exchange(0, now, Ordering::Relaxed, Ordering::Relaxed);
+    let at = METRE_INPUT_AT.load(Ordering::Relaxed);
+    if at > 0 && now - at > METRE_INPUT_GIVE_UP_MS {
+        METRE_INPUT_NO_CHANGE.fetch_add(1, Ordering::Relaxed);
+        METRE_INPUT_AT.store(now, Ordering::Relaxed);
+    }
+}
+
+/// (quadros capturados, toques medidos, soma ms, máx ms, toques sem mudança), zerando.
+pub fn metre_take_capture_stats() -> (u32, u32, i64, i64, u32) {
+    (
+        METRE_CAPTURED.swap(0, Ordering::Relaxed),
+        METRE_INPUT_N.swap(0, Ordering::Relaxed),
+        METRE_INPUT_SUM.swap(0, Ordering::Relaxed),
+        METRE_INPUT_MAX.swap(0, Ordering::Relaxed),
+        METRE_INPUT_NO_CHANGE.swap(0, Ordering::Relaxed),
+    )
 }

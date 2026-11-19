@@ -201,6 +201,12 @@ class MainService : Service() {
 
     private var serviceLooper: Looper? = null
     private var serviceHandler: Handler? = null
+    // Metre: a captura tinha a thread "Service" (THREAD_PRIORITY_BACKGROUND): no Android ela vai
+    // para o grupo de segundo plano, com pouca CPU quando o app do PDV está desenhando. A cópia de
+    // cada quadro agora roda numa thread própria com prioridade de tela. Ver METRE-CHANGES.md.
+    private val captureHandler: Handler by lazy {
+        HandlerThread("MetreCapture", Process.THREAD_PRIORITY_DISPLAY).run { start(); Handler(looper) }
+    }
 
     private val powerManager: PowerManager by lazy { applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager }
     private val wakeLock: PowerManager.WakeLock by lazy { powerManager.newWakeLock(PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "rustdesk:wakelock")}
@@ -465,7 +471,7 @@ class MainService : Service() {
                             }
                         } catch (ignored: java.lang.Exception) {
                         }
-                    }, serviceHandler)
+                    }, captureHandler)
                 }
             Log.d(logTag, "ImageReader.setOnImageAvailableListener done")
             imageReader?.surface

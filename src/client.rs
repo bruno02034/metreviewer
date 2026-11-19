@@ -4011,6 +4011,9 @@ pub fn start_video_thread<F, T>(
         let mut count = 0;
         let mut duration = std::time::Duration::ZERO;
         let mut skip_beginning = 0;
+        // Metre: (exibidos, soma us, máx us, último quadro, maior intervalo ms, início da janela)
+        let mut metre_pc: (u32, u128, u128, Option<std::time::Instant>, u128, std::time::Instant) =
+            (0, 0, 0, None, 0, std::time::Instant::now());
         loop {
             if let Ok(data) = video_receiver.recv() {
                 match data {
@@ -4065,6 +4068,30 @@ pub fn start_video_thread<F, T>(
                                     if tmp_chroma.is_some() && last_chroma != tmp_chroma {
                                         last_chroma = tmp_chroma;
                                         *chroma.write().unwrap() = tmp_chroma;
+                                    }
+
+                                    // Metre: o que o PC realmente exibe (ver METRE-CHANGES.md)
+                                    {
+                                        let now = std::time::Instant::now();
+                                        metre_pc.0 += 1;
+                                        metre_pc.1 += start.elapsed().as_micros();
+                                        metre_pc.2 = metre_pc.2.max(start.elapsed().as_micros());
+                                        if let Some(last) = metre_pc.3 {
+                                            metre_pc.4 = metre_pc.4.max((now - last).as_millis());
+                                        }
+                                        metre_pc.3 = Some(now);
+                                        let secs = metre_pc.5.elapsed().as_secs_f32();
+                                        if secs >= 5.0 {
+                                            log::info!(
+                                                "metre-pc: exibidos {:.1} q/s, decodificar+desenhar {:.1}/{:.1} ms, maior intervalo entre quadros {} ms, {:?}",
+                                                metre_pc.0 as f32 / secs,
+                                                metre_pc.1 as f32 / metre_pc.0.max(1) as f32 / 1000.0,
+                                                metre_pc.2 as f32 / 1000.0,
+                                                metre_pc.4,
+                                                format
+                                            );
+                                            metre_pc = (0, 0, 0, metre_pc.3, 0, now);
+                                        }
                                     }
 
                                     // fps calculation
