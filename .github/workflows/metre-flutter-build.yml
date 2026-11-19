@@ -893,6 +893,8 @@ jobs:
           popd
           mkdir -p signed-aab
           mv flutter/build/app/outputs/bundle/release/app-release.aab signed-aab/metreviewer-${{ env.VERSION }}.aab
+          # o build sai assinado com a chave de depuração; a Play recusa pacote com mais de uma assinatura
+          zip -d signed-aab/metreviewer-${{ env.VERSION }}.aab "META-INF/*.SF" "META-INF/*.RSA" "META-INF/*.DSA" "META-INF/*.EC" "META-INF/MANIFEST.MF" || true
 
       - name: Setup sign tool version variable
         shell: bash
