@@ -741,7 +741,7 @@ jobs:
               cp ./target/${{ matrix.job.target }}/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
               # build flutter
               pushd flutter
-              flutter build apk "--${{ matrix.job.reltype }}" --target-platform android-arm64 --split-per-abi
+              flutter build apk "--${{ matrix.job.reltype }}" --target-platform android-arm64 --split-per-abi --build-number $((1000 + ${{ github.run_number }}))
               mv build/app/outputs/flutter-apk/app-arm64-v8a-${{ matrix.job.reltype }}.apk ../rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk
             ;;
             armv7-linux-androideabi)
@@ -750,7 +750,7 @@ jobs:
               cp ./target/${{ matrix.job.target }}/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/armeabi-v7a/librustdesk.so
               # build flutter
               pushd flutter
-              flutter build apk "--${{ matrix.job.reltype }}" --target-platform android-arm --split-per-abi
+              flutter build apk "--${{ matrix.job.reltype }}" --target-platform android-arm --split-per-abi --build-number $((1000 + ${{ github.run_number }}))
               mv build/app/outputs/flutter-apk/app-armeabi-v7a-${{ matrix.job.reltype }}.apk ../rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk
             ;;
             x86_64-linux-android)
@@ -759,7 +759,7 @@ jobs:
               cp ./target/${{ matrix.job.target }}/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/x86_64/librustdesk.so
               # build flutter
               pushd flutter
-              flutter build apk "--${{ matrix.job.reltype }}" --target-platform android-x64 --split-per-abi
+              flutter build apk "--${{ matrix.job.reltype }}" --target-platform android-x64 --split-per-abi --build-number $((1000 + ${{ github.run_number }}))
               mv build/app/outputs/flutter-apk/app-x86_64-${{ matrix.job.reltype }}.apk ../rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk
             ;;
             i686-linux-android)
@@ -768,7 +768,7 @@ jobs:
               cp ./target/${{ matrix.job.target }}/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/x86/librustdesk.so
               # build flutter
               pushd flutter
-              flutter build apk "--${{ matrix.job.reltype }}" --target-platform android-x86 --split-per-abi
+              flutter build apk "--${{ matrix.job.reltype }}" --target-platform android-x86 --split-per-abi --build-number $((1000 + ${{ github.run_number }}))
               mv build/app/outputs/flutter-apk/app-x86-${{ matrix.job.reltype }}.apk ../rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk
             ;;
           esac
@@ -873,47 +873,49 @@ jobs:
           name: librustdesk.so.aarch64-linux-android
           path: ./flutter/android/app/src/main/jniLibs/arm64-v8a
 
-      - name: Build app bundle
+      # Causa da assinatura dupla: o build usava a chave de depuração (sed para signingConfigs.debug) e
+      # depois o jarsigner ACRESCENTAVA a da Metre. No .aab a assinatura é a do Gradle; aqui o Gradle já
+      # assina com a chave da Metre (signingConfigs.release + key.properties) e nada mais assina depois.
+      - name: Build signed app bundle
+        if: env.ANDROID_SIGNING_KEY != null
         shell: bash
         env:
           JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          KS_B64: ${{ secrets.ANDROID_SIGNING_KEY }}
+          KS_ALIAS: ${{ secrets.ANDROID_ALIAS }}
+          KS_PASS: ${{ secrets.ANDROID_KEY_STORE_PASSWORD }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           sudo apt-get update && sudo apt-get install -y openjdk-17-jdk-headless
           export PATH=/usr/lib/jvm/java-17-openjdk-amd64/bin:$PATH
           sed -i "s/org.gradle.jvmargs=-Xmx1024M/org.gradle.jvmargs=-Xmx2g/g" ./flutter/android/gradle.properties
-          sed -i "s/signingConfigs.release/signingConfigs.debug/g" ./flutter/android/app/build.gradle
+          KS=$RUNNER_TEMP/metre-release.jks
+          echo "$KS_B64" | base64 -d > "$KS"
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$KS" "$KS_PASS" "$KS_ALIAS" "$KEY_PASS" > ./flutter/android/key.properties
           L=./flutter/android/app/src/main/jniLibs
           mv $L/armeabi-v7a/liblibrustdesk.so $L/armeabi-v7a/librustdesk.so
           mv $L/arm64-v8a/liblibrustdesk.so $L/arm64-v8a/librustdesk.so
           cp ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/libc++_shared.so $L/armeabi-v7a/
           cp ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so $L/arm64-v8a/
           pushd flutter
-          flutter build appbundle --release --target-platform android-arm,android-arm64
+          flutter build appbundle --release --target-platform android-arm,android-arm64 --build-number $((1000 + ${{ github.run_number }}))
           popd
+          rm -f ./flutter/android/key.properties "$KS"
           mkdir -p signed-aab
           mv flutter/build/app/outputs/bundle/release/app-release.aab signed-aab/metreviewer-${{ env.VERSION }}.aab
-          # o build sai assinado com a chave de depuração; a Play recusa pacote com mais de uma assinatura
-          zip -d signed-aab/metreviewer-${{ env.VERSION }}.aab "META-INF/*.SF" "META-INF/*.RSA" "META-INF/*.DSA" "META-INF/*.EC" "META-INF/MANIFEST.MF" || true
 
-      - name: Setup sign tool version variable
-        shell: bash
-        run: |
-          BUILD_TOOL_VERSION=$(ls /usr/local/lib/android/sdk/build-tools/ | tail -n 1)
-          echo "ANDROID_SIGN_TOOL_VERSION=$BUILD_TOOL_VERSION" >> $GITHUB_ENV
-
-      - uses: r0adkll/sign-android-release@349ebdef58775b1e0d8099458af0816dc79b6407 # v1
-        name: Sign app bundle
+      # Confere o arquivo final; qualquer item fora do esperado falha o build (não publica).
+      - name: Verify app bundle for Google Play
         if: env.ANDROID_SIGNING_KEY != null
-        id: sign-aab
-        with:
-          releaseDirectory: ./signed-aab
-          signingKeyBase64: ${{ secrets.ANDROID_SIGNING_KEY }}
-          alias: ${{ secrets.ANDROID_ALIAS }}
-          keyStorePassword: ${{ secrets.ANDROID_KEY_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
         env:
-          BUILD_TOOLS_VERSION: ${{ env.ANDROID_SIGN_TOOL_VERSION }}
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+          EXPECTED_SHA256: "B9:CC:73:1C:19:6D:91:6D:F3:A9:D0:36:66:F8:F4:DE:25:0B:93:5B:90:82:84:34:F3:4B:1C:2D:66:CE:CA:BF"
+        run: |
+          export PATH=/usr/lib/jvm/java-17-openjdk-amd64/bin:$PATH
+          AAB=signed-aab/metreviewer-${{ env.VERSION }}.aab
+          bash ./flutter/metre_verify_aab.sh "$AAB" "$EXPECTED_SHA256" $((1000 + ${{ github.run_number }}))
 
       - name: Publish app bundle
         if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'
@@ -922,4 +924,4 @@ jobs:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            ${{steps.sign-aab.outputs.signedReleaseFile}}
+            signed-aab/metreviewer-${{ env.VERSION }}.aab
