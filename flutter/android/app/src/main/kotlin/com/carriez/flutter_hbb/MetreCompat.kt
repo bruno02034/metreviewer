@@ -49,18 +49,10 @@ object MetreCompat {
         "sinal ${i.rssi} dBm, ${i.linkSpeed} Mbps, ${i.frequency} MHz, sem economia: ${wifiLock?.isHeld == true}"
     } catch (e: Exception) { "indisponível ($e)" }
 
-    // Android 13+: "Configuração restrita" é a operação de app "android:access_restricted_settings"
-    // em modo ERRORED, posta pelo sistema em apps instalados a partir de um arquivo. Ler o próprio
-    // estado é permitido (unsafeCheckOpNoThrow, API 29). "sim" / "não" / "n/a" (Android < 13).
-    fun restrictedSettings(context: Context): String {
-        if (Build.VERSION.SDK_INT < 33) return "n/a"
-        return try {
-            val ops = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
-            val mode = ops.unsafeCheckOpNoThrow("android:access_restricted_settings",
-                context.applicationInfo.uid, context.packageName)
-            if (mode == android.app.AppOpsManager.MODE_ERRORED) "sim" else "não"
-        } catch (e: Exception) { "desconhecido" }
-    }
+    // O Android 13+ não deixa o app ler o próprio estado (appop de leitura restrita: exige MANAGE_APPOPS).
+    // Por isso o diagnóstico não afirma "sim" nem "não"; quem decide é a tela de Acessibilidade.
+    fun restrictedSettings(context: Context): String =
+        if (Build.VERSION.SDK_INT < 33) "n/a" else "não legível pelo app"
 
     private fun installSource(context: Context): String = try {
         if (Build.VERSION.SDK_INT >= 30) {
