@@ -96,7 +96,42 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
 
   Future<void> _grantScreen() => gFFI.serverModel.startService();
 
+  // Google Play: app que usa Acessibilidade sem ser ferramenta para pessoas com deficiência precisa
+  // de aviso em destaque, separado de outros avisos, com consentimento afirmativo antes de pedir a
+  // permissão; recusar não pode travar o app e o aviso pode ser mostrado de novo. Ver METRE-CHANGES.md.
+  Future<bool> _a11yConsent() async =>
+      await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Permitir que o técnico da Metre controle este aparelho'),
+          content: const SingleChildScrollView(
+            child: Text(
+              'O MetreViewer usa o serviço de Acessibilidade do Android para executar neste '
+              'aparelho os toques, gestos e teclas que o técnico da Metre fizer durante um '
+              'atendimento de suporte.\n\n'
+              'Para isso o serviço identifica qual tela e qual campo estão ativos. Ele não '
+              'guarda, não envia e não usa o conteúdo da tela para nenhuma outra finalidade, '
+              'e só age enquanto um técnico estiver conectado.\n\n'
+              'Você pode desligar quando quiser em Configurações > Acessibilidade > '
+              'MetreViewer Input. Sem essa permissão o técnico só consegue ver a tela.',
+              style: TextStyle(fontSize: 15),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Agora não')),
+            ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Concordo')),
+          ],
+        ),
+      ) ==
+      true;
+
   Future<void> _grantInput() async {
+    if (!await _a11yConsent()) return;
     await bind.mainSetLocalOption(key: _kA11yTried, value: 'Y');
     AndroidPermissionManager.startAction(kActionAccessibilitySettings);
   }
