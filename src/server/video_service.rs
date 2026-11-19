@@ -1601,7 +1601,7 @@ fn handle_one_frame(
     match &encoded {
         Ok(vf) => {
             let (mut bytes, mut pts) = (0usize, -1i64);
-            use hbb_common::message_proto::video_frame::Union as VU;
+            use base::message_proto::video_frame::Union as VU;
             if let Some(VU::H264s(f) | VU::H265s(f) | VU::Vp8s(f) | VU::Vp9s(f) | VU::Av1s(f)) = &vf.union {
                 for p in f.frames.iter() {
                     bytes += p.data.len();
