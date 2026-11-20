@@ -103,6 +103,8 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
 
   Future<void> _grantScreen() async {
     if (androidVersion >= 29 && !await _screenConsent()) return;
+    // Android 13+: sem esta permissão a notificação do serviço (e do atendimento) fica escondida.
+    await gFFI.serverModel.checkRequestNotificationPermission();
     await gFFI.serverModel.startService();
   }
 
@@ -119,7 +121,8 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
               'Para ajudar você, o técnico da Metre precisa ver a tela deste aparelho durante o '
               'atendimento.\n\n'
               'Na próxima tela, o Android mostra uma confirmação padrão, igual à de qualquer app de '
-              'suporte. Toque em "Iniciar agora" (ou "Start now").\n\n'
+              'suporte. Toque em "Iniciar agora" (ou "Start now"). Se o Android perguntar sobre '
+              'notificações, toque em "Permitir": assim você vê quando há um atendimento.\n\n'
               'Fique tranquilo: só o técnico da Metre vê a tela, apenas durante o atendimento, e '
               'nada é gravado.',
               style: TextStyle(fontSize: 15),
