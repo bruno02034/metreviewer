@@ -202,3 +202,14 @@ Commit `6764625` (C1–C5), run 29 (id 44737133319). Jobs Android e AAB com suce
 | APKs | apksigner OK, mesmo certificado | verificado |
 
 Fora deste build: link da política no app (commit local `d142922`, entra no próximo build, necessário antes da revisão de produção).
+
+## 9. Teste T-L1 — Lenovo instalado pela Play (20/11/2026, 11:21)
+
+| Item | Leitura (ADB, só leitura) | Estado |
+|---|---|---|
+| Origem | `installer=com.android.vending`, `packageSource=0`, versionCode 10029, instalação nova (APK anterior desinstalado com autorização) | verificado |
+| Configuração restrita | `ACCESS_RESTRICTED_SETTINGS: allow`, dois acessos (11:21:45 e 11:21:52) e **nenhuma rejeição** | verificado |
+| Acessibilidade | `MetreViewer Input` ativado pelo usuário no tablet, sem o diálogo de configuração restrita; nada liberado por ADB | verificado |
+| Descrição nova do serviço (C5) | aparece na tela do MetreViewer Input | corrigido e retestado |
+
+Conclusão: no Lenovo TB310FU (Android 13), a instalação pela Play **não** recebe a Configuração restrita — diferente do APK e do Metre Instalador (seção 4). Pendente: sessão real (imagem, toque, texto, rolagem), reinício e reconexão neste build.
