@@ -113,19 +113,15 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
-          title: const Text('Mostrar a tela ao técnico da Metre'),
+          title: const Text('Mostrar a tela para o suporte'),
           content: const SingleChildScrollView(
             child: Text(
-              'Para o técnico da Metre ajudar, ele precisa ver a tela deste aparelho durante o '
+              'Para ajudar você, o técnico da Metre precisa ver a tela deste aparelho durante o '
               'atendimento.\n\n'
-              'Em seguida o Android vai mostrar um aviso próprio (às vezes em inglês, "Start '
-              'recording or casting"). Esse aviso é o mesmo para qualquer app que compartilha a '
-              'tela e diz que tudo o que aparece nela pode ser visto.\n\n'
-              'No MetreViewer:\n'
-              '• só o técnico da Metre conectado vê a tela, e só durante o atendimento;\n'
-              '• a tela não é gravada;\n'
-              '• você pode encerrar o atendimento a qualquer momento pelo app.\n\n'
-              'Para continuar, toque em "Iniciar agora" ("Start now") no aviso do Android.',
+              'Na próxima tela, o Android mostra uma confirmação padrão, igual à de qualquer app de '
+              'suporte. Toque em "Iniciar agora" (ou "Start now").\n\n'
+              'Fique tranquilo: só o técnico da Metre vê a tela, apenas durante o atendimento, e '
+              'nada é gravado.',
               style: TextStyle(fontSize: 15),
             ),
           ),
