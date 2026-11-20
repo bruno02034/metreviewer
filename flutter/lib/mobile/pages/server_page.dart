@@ -1002,6 +1002,35 @@ void androidChannelInit() {
 }
 
 void showScamWarning(BuildContext context, ServerModel serverModel) {
+  // Metre: o aviso "SCAM" do upstream assusta o cliente do PDV. Mantém a orientação contra golpe em
+  // tom calmo, mostrada uma vez.
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Suporte da Metre'),
+      content: const Text(
+          'Use o MetreViewer apenas em atendimentos da Metre.\n\n'
+          'A Metre nunca pede senha de banco, dados de cartão ou pagamentos durante o suporte. '
+          'Se alguém pedir isso, não aceite a conexão e fale com a Metre pelos canais oficiais.',
+          style: TextStyle(fontSize: 15)),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar')),
+        ElevatedButton(
+            onPressed: () {
+              bind.mainSetLocalOption(key: "show-scam-warning", value: "N");
+              Navigator.of(context).pop();
+              serverModel.toggleService();
+            },
+            child: const Text('Entendi')),
+      ],
+    ),
+  );
+}
+
+// ignore: unused_element
+void _upstreamScamWarning(BuildContext context, ServerModel serverModel) {
   showDialog(
     context: context,
     builder: (BuildContext context) {
