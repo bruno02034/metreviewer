@@ -49,7 +49,7 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
     // Só na abertura, para não repetir o pedido se o cliente recusar.
     Future.delayed(const Duration(milliseconds: 1500), () {
       final m = gFFI.serverModel;
-      if (mounted && !m.mediaOk && !m.isStart) m.startService();
+      if (mounted && !m.mediaOk && !m.isStart) _grantScreen();
     });
   }
 
@@ -101,7 +101,45 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
     }
   }
 
-  Future<void> _grantScreen() => gFFI.serverModel.startService();
+  Future<void> _grantScreen() async {
+    if (androidVersion >= 29 && !await _screenConsent()) return;
+    await gFFI.serverModel.startService();
+  }
+
+  // O aviso de captura do Android é fixo, genérico ("acesso a senhas, pagamentos...") e às vezes em
+  // inglês. Antes dele, o app explica em português o que vai aparecer, quem vê a tela e como parar.
+  Future<bool> _screenConsent() async =>
+      await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Mostrar a tela ao técnico da Metre'),
+          content: const SingleChildScrollView(
+            child: Text(
+              'Para o técnico da Metre ajudar, ele precisa ver a tela deste aparelho durante o '
+              'atendimento.\n\n'
+              'Em seguida o Android vai mostrar um aviso próprio (às vezes em inglês, "Start '
+              'recording or casting"). Esse aviso é o mesmo para qualquer app que compartilha a '
+              'tela e diz que tudo o que aparece nela pode ser visto.\n\n'
+              'No MetreViewer:\n'
+              '• só o técnico da Metre conectado vê a tela, e só durante o atendimento;\n'
+              '• a tela não é gravada;\n'
+              '• você pode encerrar o atendimento a qualquer momento pelo app.\n\n'
+              'Para continuar, toque em "Iniciar agora" ("Start now") no aviso do Android.',
+              style: TextStyle(fontSize: 15),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Agora não')),
+            ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Continuar')),
+          ],
+        ),
+      ) ==
+      true;
 
   // Google Play: app que usa Acessibilidade sem ser ferramenta para pessoas com deficiência precisa
   // de aviso em destaque, separado de outros avisos, com consentimento afirmativo antes de pedir a
@@ -175,7 +213,8 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
                     ? 'O Android exige que você confirme uma vez. Marque "Não mostrar novamente" '
                         'e toque em "Iniciar agora".'
                     : 'O Android pede esta confirmação para mostrar a tela ao técnico. '
-                        'Toque em "Iniciar agora".',
+                        'Toque em "Iniciar agora" ("Start now"). Só o técnico conectado vê, '
+                        'e nada é gravado.',
                 _grantScreen),
           if (!model.inputOk)
             _restricted ||
