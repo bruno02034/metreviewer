@@ -115,9 +115,12 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
               'O MetreViewer usa o serviço de Acessibilidade do Android para executar neste '
               'aparelho os toques, gestos e teclas que o técnico da Metre fizer durante um '
               'atendimento de suporte.\n\n'
-              'Para isso o serviço identifica qual tela e qual campo estão ativos. Ele não '
-              'guarda, não envia e não usa o conteúdo da tela para nenhuma outra finalidade, '
+              'Para isso o serviço identifica qual tela e qual campo estão ativos e, quando o '
+              'técnico digita, lê e altera o texto do campo em que ele está digitando. O serviço '
+              'não guarda nem envia esse conteúdo e não o usa para nenhuma outra finalidade, '
               'e só age enquanto um técnico estiver conectado.\n\n'
+              'A imagem da tela é enviada ao técnico pela captura de tela, que o Android pede '
+              'separadamente.\n\n'
               'Você pode desligar quando quiser em Configurações > Acessibilidade > '
               'MetreViewer Input. Sem essa permissão o técnico só consegue ver a tela.',
               style: TextStyle(fontSize: 15),

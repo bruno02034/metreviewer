@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">RustDesk</string>
-    <string name="accessibility_service_description">Executa neste aparelho os toques e teclas do técnico da Metre durante um atendimento de suporte remoto. Só age enquanto um técnico estiver conectado.</string>
-    <string name="foreground_service_special_use_subtype">Keeps the RustDesk remote desktop host available for authorized unattended connections and foreground notifications without starting screen capture before user approval.</string>
+    <string name="app_name">MetreViewer</string>
+    <string name="accessibility_service_description">Executa neste aparelho os toques, gestos e teclas do técnico da Metre durante um atendimento de suporte remoto. Para digitar, lê e altera o texto do campo ativo. Só age enquanto um técnico estiver conectado.</string>
+    <string name="foreground_service_special_use_subtype">Keeps the MetreViewer remote support service connected to the Metre server so that a Metre support technician can reach this device when the customer needs help. A persistent notification is shown while it runs. Screen capture (mediaProjection) starts only after the user accepts the Android screen capture prompt, and the user can stop the service at any time.</string>
 </resources>
