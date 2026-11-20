@@ -173,3 +173,32 @@ A2 (build) → upload no **teste interno** → T-L1/T-L4 no Lenovo e T-M no M10 
 - 16 KB: https://developer.android.com/guide/practices/page-sizes
 
 Nenhuma das páginas exibia data de "última atualização".
+
+---
+
+## 8. Build 29 — artefato para o teste interno (auditado em 20/11/2026)
+
+Commit `6764625` (C1–C5), run 29 (id 44737133319). Jobs Android e AAB com sucesso; job Windows falhou por **HTTP 503 ao baixar um patch do vcpkg (`mfx_dispatch`) do GitHub** — falha de rede, sem relação com as mudanças; instaladores Windows do run 28 continuam na release.
+
+| Arquivo | SHA-256 | versionCode |
+|---|---|---|
+| `metreviewer-1.5.3.aab` | `9596dc0562529007899b626077d9a31d3c6736f4d67ff7eb99b2738ca5fec3f7` | **10029** |
+| `rustdesk-1.5.3-armv7-signed.apk` | `ec3b424039e677dd1fdea8a137d120306507921958065e724e51913ef86ddf7d` | 2029 |
+| `rustdesk-1.5.3-aarch64-signed.apk` | `f78b7915d992c37d47d68dc8483360c9edda64931a614de3289e0e0fd81ae22e` | 3029 |
+
+| Verificação (arquivo baixado, não o status do CI) | Resultado | Estado |
+|---|---|---|
+| `bundletool validate` | exit 0 | verificado |
+| Assinatura do AAB | `CN=MetreViewer, O=Metre, C=BR`, SHA-256 `B9:CC:73…:CE:CA:BF` (será a **chave de upload**) | verificado |
+| versionCode AAB > APKs | 10029 > 3029 > 2029 | corrigido e retestado (C1) |
+| minSdk / targetSdk / compileSdk | 22 / 36 / 36 | verificado |
+| Permissões | idênticas ao run 28 (nenhuma nova) | verificado |
+| 16 KB | `PAGE_ALIGNMENT_16K`; 4 libs arm64 com LOAD ≥ 16384 | verificado |
+| Nome do app no APK gerado do AAB | `application-label:'MetreViewer'` | corrigido e retestado (C3) |
+| Notificação/canal | código compilado sem "RustDesk Service"; contém "Suporte remoto Metre" | corrigido e retestado (C3) |
+| Texto do `specialUse` | "Keeps the MetreViewer remote support service…" | corrigido e retestado (C4) |
+| Logs com texto digitado | "existing text:" ausente do código compilado; "hasText:" presente | corrigido e retestado (C2) |
+| Aviso da Acessibilidade (C5) | só verificável na tela | pendente de teste no aparelho |
+| APKs | apksigner OK, mesmo certificado | verificado |
+
+Fora deste build: link da política no app (commit local `d142922`, entra no próximo build, necessário antes da revisão de produção).
