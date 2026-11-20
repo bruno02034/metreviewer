@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../common.dart';
 import '../../common/metre_theme.dart';
@@ -17,6 +18,7 @@ import 'settings_page.dart';
 const _kAutostartDone = 'metre-autostart-done';
 // Já mandamos o cliente para a tela de Acessibilidade uma vez (ver _grantInput)
 const _kA11yTried = 'metre-a11y-tried';
+const kMetrePrivacyUrl = 'https://bruno02034.github.io/metreviewer/privacidade.html';
 
 class MetrePdvPage extends StatefulWidget {
   const MetrePdvPage({super.key});
@@ -246,6 +248,13 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
                             MaterialPageRoute(
                                 builder: (_) => const _AdvancedPage())),
                         child: const Text('Opções avançadas (técnico)',
+                            style: TextStyle(color: MetreColors.gray)),
+                      ),
+                    ),
+                    Center(
+                      child: TextButton(
+                        onPressed: () => launchUrlString(kMetrePrivacyUrl),
+                        child: const Text('Política de privacidade',
                             style: TextStyle(color: MetreColors.gray)),
                       ),
                     ),
