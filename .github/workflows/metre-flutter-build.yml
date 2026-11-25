@@ -623,6 +623,16 @@ jobs:
           channel: "stable"
           flutter-version: ${{ env.ANDROID_FLUTTER_VERSION }}
 
+      # Metre: guarda as dependências do Gradle entre builds; o Maven Central recusa (429) downloads do runner
+      - name: Cache Gradle
+        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('flutter/android/**/*.gradle*', 'flutter/android/gradle/wrapper/gradle-wrapper.properties', 'flutter/pubspec.lock') }}
+          restore-keys: gradle-${{ runner.os }}-
+
       - name: Patch flutter
         run: |
           cd $(dirname $(dirname $(which flutter)))
@@ -841,6 +851,16 @@ jobs:
         with:
           channel: "stable"
           flutter-version: ${{ env.ANDROID_FLUTTER_VERSION }}
+
+      # Metre: guarda as dependências do Gradle entre builds; o Maven Central recusa (429) downloads do runner
+      - name: Cache Gradle
+        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('flutter/android/**/*.gradle*', 'flutter/android/gradle/wrapper/gradle-wrapper.properties', 'flutter/pubspec.lock') }}
+          restore-keys: gradle-${{ runner.os }}-
 
       - name: Patch flutter
         run: |
