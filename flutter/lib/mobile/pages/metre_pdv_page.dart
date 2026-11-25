@@ -334,7 +334,7 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
               )
             : (
                 Icons.info,
-                MetreColors.orange,
+                MetreColors.primary,
                 'Falta pouco',
                 'Faça os passos abaixo uma única vez para liberar o suporte.'
               );
@@ -403,7 +403,7 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Icon(steps[i].icon, color: MetreColors.orange, size: 28),
+                Icon(steps[i].icon, color: MetreColors.primary, size: 28),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
@@ -431,7 +431,7 @@ class _MetrePdvPageState extends State<MetrePdvPage> with WidgetsBindingObserver
                 ],
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: i == 0 ? MetreColors.orange : null,
+                      backgroundColor: i == 0 ? MetreColors.primary : null,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 22, vertical: 14)),
                   onPressed: _busy ? null : () => _run(steps[i].action),

@@ -168,7 +168,7 @@ class _MetreHomePageState extends State<MetreHomePage> {
                   child: Row(children: [
                     CircleAvatar(
                       radius: 15,
-                      backgroundColor: MetreColors.orange,
+                      backgroundColor: MetreColors.primary,
                       child: Text(
                           gFFI.userModel.displayNameOrUserName
                               .substring(0, 1)
@@ -213,7 +213,7 @@ class _MetreHomePageState extends State<MetreHomePage> {
           height: 50,
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-                backgroundColor: MetreColors.orange,
+                backgroundColor: MetreColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 24)),
             onPressed: target == null ? null : () => connect(context, target),
@@ -228,7 +228,7 @@ class _MetreHomePageState extends State<MetreHomePage> {
     Widget chip(String label, bool selected, bool value) => ChoiceChip(
           label: Text(label),
           selected: selected,
-          selectedColor: MetreColors.orange.withOpacity(0.15),
+          selectedColor: MetreColors.primary.withOpacity(0.15),
           onSelected: (_) => setState(() => _onlyOnline = value),
         );
     return Row(children: [
@@ -337,7 +337,7 @@ class _MetreHomePageState extends State<MetreHomePage> {
             const SizedBox(width: 4),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                  backgroundColor: MetreColors.orange,
+                  backgroundColor: MetreColors.primary,
                   foregroundColor: Colors.white,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 20, vertical: 14)),

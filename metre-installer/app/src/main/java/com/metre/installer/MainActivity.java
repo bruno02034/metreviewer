@@ -51,7 +51,7 @@ public class MainActivity extends Activity {
         TextView title = new TextView(this);
         title.setText("Suporte Metre");
         title.setTextSize(26);
-        title.setTextColor(0xFFE8461E);
+        title.setTextColor(0xFF0B5CC4);
         title.setGravity(Gravity.CENTER);
         status = new TextView(this);
         status.setTextSize(18);

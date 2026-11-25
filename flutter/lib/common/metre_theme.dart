@@ -2,8 +2,8 @@
 import 'package:flutter/material.dart';
 
 class MetreColors {
-  static const orange = Color(0xFFE8461E);
-  static const orangeLight = Color(0xFFFF7A2F);
+  static const primary = Color(0xFF0B5CC4); // azul da logo
+  static const primaryLight = Color(0xFF2F80E0);
   static const green = Color(0xFF1E9E5A);
   static const blue = Color(0xFF2563EB);
   static const gray = Color(0xFF6B7280);
