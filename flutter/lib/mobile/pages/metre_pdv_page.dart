@@ -463,6 +463,8 @@ class _AdvancedPage extends StatelessWidget {
         child: Scaffold(
           appBar: AppBar(
             title: const Text('Opções avançadas'),
+            // Menu ⋮ do upstream (senha permanente, modo de aprovação, trocar ID); a tela do PDV não tem AppBar própria
+            actions: ServerPage().appBarActions,
             bottom: const TabBar(tabs: [
               Tab(text: 'Serviço e permissões'),
               Tab(text: 'Configurações'),
